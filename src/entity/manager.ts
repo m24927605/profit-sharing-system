@@ -20,7 +20,6 @@ export class Manager extends BaseEntity {
   @Column({
     type: 'varchar',
     nullable: false,
-    unique: true,
     length: 50
   })
   @Index()
