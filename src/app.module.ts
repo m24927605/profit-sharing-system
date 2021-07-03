@@ -1,4 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -17,6 +18,7 @@ import { UserSharesFlow } from './entity/user-shares-flow';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    JwtModule.register({ secret: process.env.JWT_SECRET }),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST,

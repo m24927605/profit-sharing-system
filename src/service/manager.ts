@@ -1,8 +1,10 @@
-import { hashSync } from 'bcrypt';
+import { hashSync, compareSync } from 'bcrypt';
 import { getRepository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
-import { CreateManagerDto } from '../controller/dto/manager';
+import {
+  CreateManagerDto
+} from '../controller/dto/manager';
 import { Manager } from '../entity/manager';
 
 @Injectable()
@@ -12,6 +14,16 @@ export class ManagerService {
   public async create(createManagerDto: CreateManagerDto): Promise<void> {
     createManagerDto.password = hashSync(createManagerDto.password, this._saltOrRounds);
     const managerRepository = getRepository(Manager);
-    await managerRepository.save(createManagerDto);;
+    await managerRepository.save(createManagerDto);
+    ;
+  }
+
+  public async getManager(email: string): Promise<Manager> {
+    const managerRepository = getRepository(Manager);
+    return await managerRepository.findOneOrFail({ email });
+  }
+
+  public async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
+    return compareSync(password,hashedPassword);
   }
 }
