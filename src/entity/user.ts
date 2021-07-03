@@ -5,7 +5,6 @@ import {
   BeforeUpdate,
   Column,
   Entity,
-  Index,
   PrimaryColumn
 } from 'typeorm';
 
