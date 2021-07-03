@@ -30,7 +30,7 @@ export class ManagerController {
     } catch (e) {
       const responsePayload = new ResponsePayload();
       responsePayload.status = HttpStatus.EXPECTATION_FAILED;
-      responsePayload.type = ResponseType.FINISH;
+      responsePayload.type = ResponseType.ERROR;
       responsePayload.message = e.message;
       throw new HttpException(responsePayload, responsePayload.status);
     }
