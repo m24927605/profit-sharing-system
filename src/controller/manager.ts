@@ -1,6 +1,6 @@
 import {
-  Controller
-  , Post
+  Controller,
+  Post
 } from '@nestjs/common';
 import { ManagerService } from '../service/manager';
 
