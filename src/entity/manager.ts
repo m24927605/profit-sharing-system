@@ -1,18 +1,15 @@
-import dayjs from 'dayjs';
 import {
   BaseEntity,
-  BeforeInsert,
-  BeforeUpdate,
   Column,
   Entity,
   Index,
-  PrimaryColumn
+  PrimaryGeneratedColumn
 } from 'typeorm';
 
 @Entity()
 export class Manager extends BaseEntity {
-  @PrimaryColumn({
-    type: 'bigint',
+  @PrimaryGeneratedColumn({
+    type: 'int',
     unsigned: true
   })
   id: number;
@@ -39,30 +36,16 @@ export class Manager extends BaseEntity {
   name: string;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false,
+    type: 'timestamp',
     readonly: true,
-    default: 0
+    default: () => 'CURRENT_TIMESTAMP'
   })
   updatedAt: number;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false,
+    type: 'timestamp',
     readonly: true,
-    default: 0
+    default: () => 'CURRENT_TIMESTAMP'
   })
   createdAt: number;
-
-  @BeforeUpdate()
-  updateDateUpdate() {
-    this.updatedAt = dayjs().unix();
-  }
-
-  @BeforeInsert()
-  updateDateCreation() {
-    this.createdAt = dayjs().unix();
-  }
 }

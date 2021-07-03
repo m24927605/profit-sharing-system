@@ -38,7 +38,9 @@ import { UserSharesFlow } from './entity/user-shares-flow';
     })
   ],
   controllers: [ManagerController],
-  providers: [ManagerService]
+  providers: [
+    ManagerService
+  ]
 })
 
 export class AppModule {
