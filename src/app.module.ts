@@ -9,7 +9,9 @@ import {
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ManagerController } from './controller/manager';
+import { InvestmentController } from './controller/investment';
 import { UserController } from './controller/user';
+import { ClaimBooking } from './entity/claim-booking';
 import { CompanyCashFlow } from './entity/company-cash-flow';
 import { CompanyProfitBalance } from './entity/company_profit_balance';
 import { Manager } from './entity/manager';
@@ -20,6 +22,7 @@ import { UserSharesBalance } from './entity/user-shares-balance';
 import { UserSharesFlow } from './entity/user-shares-flow';
 import { AuthMiddleware } from './middleware/auth';
 import { ManagerService } from './service/manager';
+import { InvestmentService } from './service/investment';
 import { UserService } from './service/user';
 
 
@@ -35,6 +38,7 @@ import { UserService } from './service/user';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       entities: [
+        ClaimBooking,
         CompanyCashFlow,
         CompanyProfitBalance,
         Manager,
@@ -49,10 +53,12 @@ import { UserService } from './service/user';
   ],
   controllers: [
     ManagerController,
-    UserController
+    InvestmentController,
+    UserController,
   ],
   providers: [
     ManagerService,
+    InvestmentService,
     UserService
   ]
 })
@@ -67,7 +73,11 @@ export class AppModule implements NestModule {
       .forRoutes(ManagerController);
     consumer
       .apply(AuthMiddleware)
+      .forRoutes(InvestmentController);
+    consumer
+      .apply(AuthMiddleware)
       .forRoutes(UserController);
+
 
   }
 }

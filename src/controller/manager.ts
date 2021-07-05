@@ -8,39 +8,35 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-import { ManagerService } from '../service/manager';
-import { Handler } from '../util/handler';
 import {
   CreateManagerDto,
   ManagerLoginDto
-} from './dto/manager';
+} from '../dto/manager';
+import { ManagerService } from '../service/manager';
+import { Handler } from '../util/handler';
 import {
   ResponsePayload,
   ResponseType
 } from './base/response';
 
 @Controller('/managers')
-export class ManagerController extends Handler {
+export class ManagerController {
   protected _expiresIn = 60 * 60 * 24;
 
   constructor(
     private readonly _managerService: ManagerService,
     private readonly _jwtService: JwtService
   ) {
-    super();
   }
 
   @Post()
   public async create(@Body() createManagerDto: CreateManagerDto, @Res() res: Response): Promise<void> {
     try {
       await this._managerService.create(createManagerDto);
-      const responsePayload = new ResponsePayload();
-      responsePayload.status = HttpStatus.OK;
-      responsePayload.type = ResponseType.FINISH;
-      responsePayload.message = 'create manager successfully.';
-      res.status(responsePayload.status).json(responsePayload);
+      const passResponse = Handler.passHandler('create manager successfully.');
+      res.status(passResponse.status).json(passResponse);
     } catch (e) {
-      await ManagerController._errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 
@@ -63,7 +59,7 @@ export class ManagerController extends Handler {
       }
       res.status(responsePayload.status).json(responsePayload);
     } catch (e) {
-      await ManagerController._errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 }
