@@ -15,14 +15,14 @@ export class UserSharesFlow extends BaseEntity {
     unsigned: true,
     nullable: false
   })
-  invest: number;
+  invest: string;
 
   @Column({
     type: 'bigint',
     unsigned: true,
     nullable: false
   })
-  withdraw: number;
+  withdraw: string;
 
   @Column({
     type: 'timestamp',
