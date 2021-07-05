@@ -1,8 +1,17 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ResponsePayload, ResponseType } from '../controller/base/response';
 
-export class Handler{
-  protected static async _errorHandler(status: HttpStatus, type: ResponseType, message: string): Promise<void> {
+export class Handler {
+  public static passHandler<T>(message: string, data?: T): ResponsePayload<T> {
+    const responsePayload = new ResponsePayload<T>();
+    responsePayload.status = HttpStatus.OK;
+    responsePayload.type = ResponseType.FINISH;
+    responsePayload.message = message;
+    responsePayload.data = data;
+    return responsePayload;
+  }
+
+  public static errorHandler(status: HttpStatus, type: ResponseType, message: string): void {
     const responsePayload = new ResponsePayload();
     responsePayload.status = status;
     responsePayload.type = type;

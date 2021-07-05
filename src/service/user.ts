@@ -1,7 +1,8 @@
 import { UniqueID } from 'nodejs-snowflake';
 import { getRepository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from '../controller/dto/user';
+
+import { CreateUserDto } from '../dto/user';
 import { User } from '../entity/user';
 
 @Injectable()

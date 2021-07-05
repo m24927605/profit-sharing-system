@@ -13,21 +13,20 @@ import { ResponseType } from '../controller/base/response';
 import { Handler } from '../util/handler';
 
 @Injectable()
-export class AuthMiddleware extends Handler implements NestMiddleware {
+export class AuthMiddleware implements NestMiddleware {
   constructor(private readonly _jwtService: JwtService) {
-    super();
   }
 
   public async use(req: Request, res: Response, next: NextFunction) {
     const token = req.headers.token as string;
     if (!token) {
-      await Handler._errorHandler(HttpStatus.BAD_REQUEST, ResponseType.ERROR, 'token is required.');
+      Handler.errorHandler(HttpStatus.BAD_REQUEST, ResponseType.ERROR, 'token is required.');
     }
     try{
       await this._jwtService.verifyAsync(token);
       next();
     }catch (e) {
-      await Handler._errorHandler(HttpStatus.FORBIDDEN, ResponseType.ERROR, 'token is invalid.');
+      Handler.errorHandler(HttpStatus.FORBIDDEN, ResponseType.ERROR, 'token is invalid.');
     }
   }
 }

@@ -2,9 +2,7 @@ import { hashSync, compareSync } from 'bcrypt';
 import { getRepository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
-import {
-  CreateManagerDto
-} from '../controller/dto/manager';
+import { CreateManagerDto } from '../dto/manager';
 import { Manager } from '../entity/manager';
 
 @Injectable()

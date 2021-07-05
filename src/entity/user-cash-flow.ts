@@ -1,8 +1,5 @@
-import dayjs from 'dayjs';
 import {
   BaseEntity,
-  BeforeInsert,
-  BeforeUpdate,
   Column,
   Entity,
   PrimaryGeneratedColumn
@@ -28,30 +25,16 @@ export class UserCashFlow extends BaseEntity {
   withdraw: number;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false,
+    type: 'timestamp',
     readonly: true,
-    default: 0
+    default: () => 'CURRENT_TIMESTAMP'
   })
   updatedAt: number;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false,
+    type: 'timestamp',
     readonly: true,
-    default: 0
+    default: () => 'CURRENT_TIMESTAMP'
   })
   createdAt: number;
-
-  @BeforeUpdate()
-  updateDateUpdate() {
-    this.updatedAt = dayjs().unix();
-  }
-
-  @BeforeInsert()
-  updateDateCreation() {
-    this.createdAt = dayjs().unix();
-  }
 }

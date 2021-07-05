@@ -6,23 +6,20 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class UserSharesFlow extends BaseEntity {
+export class ClaimBooking extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false
+    type: 'bigint'
   })
-  invest: number;
+  userId: string;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false
+    type: 'smallint',
+    default: 0
   })
-  withdraw: number;
+  status: number;
 
   @Column({
     type: 'timestamp',
