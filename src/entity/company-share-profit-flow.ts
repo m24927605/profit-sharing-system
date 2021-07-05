@@ -6,7 +6,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class CompanyCashFlow extends BaseEntity {
+export class CompanyShareProfitFlow extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
