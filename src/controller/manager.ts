@@ -2,14 +2,14 @@ import { Response } from 'express';
 import {
   Body,
   Controller,
-  HttpException,
   HttpStatus,
   Post,
-  Res,
+  Res
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
 import { ManagerService } from '../service/manager';
+import { Handler } from '../util/handler';
 import {
   CreateManagerDto,
   ManagerLoginDto
@@ -19,18 +19,19 @@ import {
   ResponseType
 } from './base/response';
 
-@Controller('/manager')
-export class ManagerController {
+@Controller('/managers')
+export class ManagerController extends Handler {
   protected _expiresIn = 60 * 60 * 24;
 
   constructor(
     private readonly _managerService: ManagerService,
     private readonly _jwtService: JwtService
   ) {
+    super();
   }
 
   @Post()
-  public async create(@Body() createManagerDto: CreateManagerDto,@Res() res: Response): Promise<void> {
+  public async create(@Body() createManagerDto: CreateManagerDto, @Res() res: Response): Promise<void> {
     try {
       await this._managerService.create(createManagerDto);
       const responsePayload = new ResponsePayload();
@@ -44,7 +45,7 @@ export class ManagerController {
   }
 
   @Post('/login')
-  public async login(@Body() managerLoginDto: ManagerLoginDto,@Res() res: Response): Promise<void> {
+  public async login(@Body() managerLoginDto: ManagerLoginDto, @Res() res: Response): Promise<void> {
     try {
       const { email, password } = managerLoginDto;
       const manager = await this._managerService.getManager(email);
@@ -64,14 +65,6 @@ export class ManagerController {
     } catch (e) {
       await ManagerController._errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
-  }
-
-  private static async _errorHandler(status: HttpStatus, type: ResponseType, message: string): Promise<void> {
-    const responsePayload = new ResponsePayload();
-    responsePayload.status = status;
-    responsePayload.type = type;
-    responsePayload.message = message;
-    throw new HttpException(responsePayload, responsePayload.status);
   }
 }
 

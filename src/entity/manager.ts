@@ -16,10 +16,9 @@ export class Manager extends BaseEntity {
 
   @Column({
     type: 'varchar',
-    nullable: false,
     length: 50
   })
-  @Index()
+  @Index({ unique: true })
   email: string;
 
   @Column({
