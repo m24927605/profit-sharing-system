@@ -11,6 +11,7 @@ import {
 import {
   ClaimDto,
   InvestDto,
+  WithdrawDto
 } from '../dto/investment';
 import { UtilController } from '../util/controller';
 import { InvestmentService } from '../service/investment';
@@ -39,6 +40,17 @@ export class InvestmentController {
     try {
       await this._investmentService.claim(claimDto);
       const passResponse = UtilController.passHandler('claim successfully.');
+      res.status(passResponse.status).json(passResponse);
+    } catch (e) {
+      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+    }
+  }
+
+  @Post('/withdraw')
+  public async withdraw(@Body() withdrawDto: WithdrawDto, @Res() res: Response): Promise<void> {
+    try {
+      await this._investmentService.withdraw(withdrawDto);
+      const passResponse = UtilController.passHandler('withdraw successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
       await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
