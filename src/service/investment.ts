@@ -2,15 +2,17 @@ import BigNumber from 'bignumber.js';
 import { getRepository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
-import { UtilService } from '../util/service';
-
 import {
   ClaimDto,
   InvestDto,
-  UserShares
+  UserShares,
+  WithDraw,
+  WithdrawDto
 } from '../dto/investment';
 import { ClaimBooking } from '../entity/claim-booking';
 import { UserSharesFlow } from '../entity/user-shares-flow';
+import { UserCashFlow } from '../entity/user-cash-flow';
+import { UtilService } from '../util/service';
 
 @Injectable()
 export class InvestmentService {
@@ -33,6 +35,13 @@ export class InvestmentService {
     await claimBookingRepository.save(claimBooking);
   }
 
-  public async withdraw(claimDto: ClaimDto): Promise<void> {
+  public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
+    const withDraw = new WithDraw();
+    withDraw.id = UtilService.genUniqueId();
+    withDraw.userId = withdrawDto.userId;
+    withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
+    withDraw.deposit = new BigNumber(0).toNumber();
+    const UserCashFlowRepository = getRepository(UserCashFlow);
+    await UserCashFlowRepository.save(withDraw);
   }
 }

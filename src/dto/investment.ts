@@ -1,4 +1,5 @@
 import {
+  IsDecimal,
   IsNotEmpty,
   IsNumber,
   IsString
@@ -20,6 +21,16 @@ export class InvestDto {
   amount: number;
 }
 
+export class WithdrawDto {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+
+  @IsDecimal()
+  @IsNotEmpty()
+  amount: string;
+}
+
 export class ClaimBooking {
   id: string;
   userId: string;
@@ -30,4 +41,11 @@ export class UserShares {
   userId: string;
   invest: string;
   withdraw: string;
+}
+
+export class WithDraw {
+  id: string;
+  userId: string;
+  withdraw: number;
+  deposit: number;
 }
