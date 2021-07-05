@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import {
   Body,
-  Controller, HttpStatus,
+  Controller,
+  HttpStatus,
   Post,
   Res
 } from '@nestjs/common';
@@ -10,9 +11,7 @@ import { ClaimDto } from '../dto/investment';
 import { Handler } from '../util/handler';
 import { InvestmentService } from '../service/investment';
 
-import {
-  ResponseType
-} from './base/response';
+import { ResponseType } from './base/response';
 
 @Controller('/investment')
 export class InvestmentController{

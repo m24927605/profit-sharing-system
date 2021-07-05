@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { CompanyController } from './controller/company';
 import { ManagerController } from './controller/manager';
 import { InvestmentController } from './controller/investment';
 import { UserController } from './controller/user';
@@ -23,6 +24,7 @@ import { UserSharesFlow } from './entity/user-shares-flow';
 import { AuthMiddleware } from './middleware/auth';
 import { ManagerService } from './service/manager';
 import { InvestmentService } from './service/investment';
+import { SharedProfitService } from './service/shared-profit';
 import { UserService } from './service/user';
 
 
@@ -52,6 +54,7 @@ import { UserService } from './service/user';
     })
   ],
   controllers: [
+    CompanyController,
     ManagerController,
     InvestmentController,
     UserController,
@@ -59,12 +62,16 @@ import { UserService } from './service/user';
   providers: [
     ManagerService,
     InvestmentService,
+    SharedProfitService,
     UserService
   ]
 })
 
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AuthMiddleware)
+      .forRoutes(CompanyController);
     consumer
       .apply(AuthMiddleware)
       .exclude(
@@ -77,7 +84,5 @@ export class AppModule implements NestModule {
     consumer
       .apply(AuthMiddleware)
       .forRoutes(UserController);
-
-
   }
 }
