@@ -6,6 +6,7 @@ import {
   NestModule,
   RequestMethod
 } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CompanyController } from './controller/company';
@@ -32,6 +33,7 @@ import { UserService } from './service/user';
   imports: [
     ConfigModule.forRoot(),
     JwtModule.register({ secret: process.env.JWT_SECRET }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST,

@@ -8,14 +8,13 @@ import {
 } from '@nestjs/common';
 
 import { CreateUserDto } from '../dto/user';
-import { Handler } from '../util/handler';
+import { UtilController } from '../util/controller';
 import { UserService } from '../service/user';
 import { ResponseType } from './base/response';
 
 
 @Controller('/users')
 export class UserController {
-
   constructor(protected readonly _userService: UserService) {
   }
 
@@ -23,10 +22,10 @@ export class UserController {
   public async create(@Body() createUserDto: CreateUserDto, @Res() res: Response): Promise<void> {
     try {
       await this._userService.create(createUserDto);
-      const passResponse = Handler.passHandler('create user successfully.');
+      const passResponse = UtilController.passHandler('create user successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
-      Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 }

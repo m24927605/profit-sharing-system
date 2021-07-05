@@ -1,5 +1,8 @@
-import { hashSync, compareSync } from 'bcrypt';
 import { getRepository } from 'typeorm';
+import {
+  compareSync,
+  hashSync
+} from 'bcrypt';
 import { Injectable } from '@nestjs/common';
 
 import { CreateManagerDto } from '../dto/manager';

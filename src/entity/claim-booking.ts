@@ -1,14 +1,16 @@
 import {
   BaseEntity,
   Column,
-  Entity,
+  Entity, PrimaryColumn,
   PrimaryGeneratedColumn
 } from 'typeorm';
 
 @Entity()
 export class ClaimBooking extends BaseEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn({
+    type: 'bigint',
+  })
+  id: string;
 
   @Column({
     type: 'bigint'

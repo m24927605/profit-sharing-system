@@ -1,26 +1,33 @@
 import {
   BaseEntity,
   Column,
-  Entity,
+  Entity, PrimaryColumn,
   PrimaryGeneratedColumn
 } from 'typeorm';
 
 @Entity()
 export class UserCashFlow extends BaseEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn({
+    type: 'bigint',
+  })
+  id: string;
 
   @Column({
     type: 'bigint',
-    unsigned: true,
-    nullable: false
+  })
+  userId: string;
+
+  @Column({
+    type: 'decimal',
+    precision: 63,
+    scale: 2
   })
   deposit: number;
 
   @Column({
-    type: 'bigint',
-    unsigned: true,
-    nullable: false
+    type: 'decimal',
+    precision: 63,
+    scale: 2
   })
   withdraw: number;
 
