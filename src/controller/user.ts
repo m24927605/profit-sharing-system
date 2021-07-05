@@ -10,9 +10,7 @@ import {
 import { CreateUserDto } from '../dto/user';
 import { Handler } from '../util/handler';
 import { UserService } from '../service/user';
-import {
-  ResponseType
-} from './base/response';
+import { ResponseType } from './base/response';
 
 
 @Controller('/users')
