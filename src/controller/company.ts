@@ -8,7 +8,7 @@ import {
   Res
 } from '@nestjs/common';
 
-import { Handler } from '../util/handler';
+import { UtilController } from '../util/controller';
 import {
   SharedProfit,
   SharedProfitDto
@@ -28,10 +28,10 @@ export class CompanyController {
       sharedProfit.income = new BigNumber(sharedProfitDto.income).toNumber();
       sharedProfit.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
       await this._sharedProfitService.addProfit(sharedProfit);
-      const passResponse = Handler.passHandler('add shared profit successfully.');
+      const passResponse = UtilController.passHandler('add shared profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
-      await Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 }

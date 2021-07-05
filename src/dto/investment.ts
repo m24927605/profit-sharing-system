@@ -11,12 +11,23 @@ export class ClaimDto {
 }
 
 export class InvestDto {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+
   @IsNumber()
   @IsNotEmpty()
-  amount: string;
+  amount: number;
 }
 
-export class UserSharesFlowDto {
+export class ClaimBooking {
+  id: string;
+  userId: string;
+}
+
+export class UserShares {
+  id: string;
+  userId: string;
   invest: string;
   withdraw: string;
 }

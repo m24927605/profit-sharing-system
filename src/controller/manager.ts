@@ -13,7 +13,7 @@ import {
   ManagerLoginDto
 } from '../dto/manager';
 import { ManagerService } from '../service/manager';
-import { Handler } from '../util/handler';
+import { UtilController } from '../util/controller';
 import {
   ResponsePayload,
   ResponseType
@@ -33,10 +33,10 @@ export class ManagerController {
   public async create(@Body() createManagerDto: CreateManagerDto, @Res() res: Response): Promise<void> {
     try {
       await this._managerService.create(createManagerDto);
-      const passResponse = Handler.passHandler('create manager successfully.');
+      const passResponse = UtilController.passHandler('create manager successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
-      Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 
@@ -59,7 +59,7 @@ export class ManagerController {
       }
       res.status(responsePayload.status).json(responsePayload);
     } catch (e) {
-      Handler.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+      UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
     }
   }
 }

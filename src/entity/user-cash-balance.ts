@@ -1,14 +1,16 @@
 import {
   BaseEntity,
   Column,
-  Entity,
+  Entity, PrimaryColumn,
   PrimaryGeneratedColumn
 } from 'typeorm';
 
 @Entity()
 export class UserCashBalance extends BaseEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn({
+    type: 'bigint',
+  })
+  userId: string;
 
   @Column({
     type: 'decimal',

@@ -1,14 +1,21 @@
 import {
   BaseEntity,
   Column,
-  Entity,
+  Entity, PrimaryColumn,
   PrimaryGeneratedColumn
 } from 'typeorm';
 
 @Entity()
 export class UserSharesFlow extends BaseEntity {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn({
+    type: 'bigint',
+  })
+  id: string;
+
+  @Column({
+    type: 'bigint',
+  })
+  userId: string;
 
   @Column({
     type: 'bigint',

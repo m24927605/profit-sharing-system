@@ -1,7 +1,13 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
-import { ResponsePayload, ResponseType } from '../controller/base/response';
+import {
+  HttpException,
+  HttpStatus
+} from '@nestjs/common';
+import {
+  ResponseType,
+  ResponsePayload
+} from '../controller/base/response';
 
-export class Handler {
+export class UtilController {
   public static passHandler<T>(message: string, data?: T): ResponsePayload<T> {
     const responsePayload = new ResponsePayload<T>();
     responsePayload.status = HttpStatus.OK;
