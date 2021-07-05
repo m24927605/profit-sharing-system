@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ManagerController } from './controller/manager';
@@ -13,6 +13,7 @@ import { UserCashBalance } from './entity/user-cash-balance';
 import { UserCashFlow } from './entity/user-cash-flow';
 import { UserSharesBalance } from './entity/user-shares-balance';
 import { UserSharesFlow } from './entity/user-shares-flow';
+import { AuthMiddleware } from './middleware/auth';
 
 
 @Module({
@@ -45,5 +46,14 @@ import { UserSharesFlow } from './entity/user-shares-flow';
   ]
 })
 
-export class AppModule {
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AuthMiddleware)
+      .exclude(
+        { path: 'managers/login', method: RequestMethod.POST },
+      )
+      .forRoutes(ManagerController)
+
+  }
 }
