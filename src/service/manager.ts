@@ -15,7 +15,6 @@ export class ManagerService {
     createManagerDto.password = hashSync(createManagerDto.password, this._saltOrRounds);
     const managerRepository = getRepository(Manager);
     await managerRepository.save(createManagerDto);
-    ;
   }
 
   public async getManager(email: string): Promise<Manager> {

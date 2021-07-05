@@ -1,10 +1,15 @@
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod
+} from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ManagerController } from './controller/manager';
-import { ManagerService } from './service/manager';
+import { UserController } from './controller/user';
 import { CompanyCashFlow } from './entity/company-cash-flow';
 import { CompanyProfitBalance } from './entity/company_profit_balance';
 import { Manager } from './entity/manager';
@@ -14,6 +19,8 @@ import { UserCashFlow } from './entity/user-cash-flow';
 import { UserSharesBalance } from './entity/user-shares-balance';
 import { UserSharesFlow } from './entity/user-shares-flow';
 import { AuthMiddleware } from './middleware/auth';
+import { ManagerService } from './service/manager';
+import { UserService } from './service/user';
 
 
 @Module({
@@ -40,9 +47,13 @@ import { AuthMiddleware } from './middleware/auth';
       synchronize: true
     })
   ],
-  controllers: [ManagerController],
+  controllers: [
+    ManagerController,
+    UserController
+  ],
   providers: [
-    ManagerService
+    ManagerService,
+    UserService
   ]
 })
 
@@ -51,9 +62,12 @@ export class AppModule implements NestModule {
     consumer
       .apply(AuthMiddleware)
       .exclude(
-        { path: 'managers/login', method: RequestMethod.POST },
+        { path: 'managers/login', method: RequestMethod.POST }
       )
-      .forRoutes(ManagerController)
+      .forRoutes(ManagerController);
+    consumer
+      .apply(AuthMiddleware)
+      .forRoutes(UserController);
 
   }
 }
