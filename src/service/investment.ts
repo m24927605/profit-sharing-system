@@ -12,7 +12,6 @@ import {
   ClaimDto,
   InvestDto,
   UserShares,
-  UserSharesBalanceData,
   WithDraw,
   WithdrawDto
 } from '../dto/investment';
@@ -99,13 +98,47 @@ export class InvestmentService {
   }
 
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
-    const withDraw = new WithDraw();
-    withDraw.id = UtilService.genUniqueId();
-    withDraw.userId = withdrawDto.userId;
-    withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
-    withDraw.deposit = new BigNumber(0).toNumber();
-    const UserCashFlowRepository = getRepository(UserCashFlow);
-    await UserCashFlowRepository.save(withDraw);
+    let errorMessage = '';
+    // get a connection and create a new query runner
+    const connection = getConnection();
+    const queryRunner = connection.createQueryRunner();
+    // establish real database connection using our new query runner
+    await queryRunner.connect();
+    // lets now open a new transaction:
+    await queryRunner.startTransaction();
+    try {
+      const withDraw = new WithDraw();
+      withDraw.id = UtilService.genUniqueId();
+      withDraw.userId = withdrawDto.userId;
+      withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
+      withDraw.deposit = new BigNumber(0).toNumber();
+      const UserCashBalanceRepository = queryRunner.manager.getRepository(UserCashBalance);
+      const userCashBalance = await UserCashBalanceRepository.findOne(withdrawDto.userId);
+      if (userCashBalance.balance < withDraw.withdraw) {
+        throw new Error('Withdraw amount must small than balance.');
+      }
+      userCashBalance.balance = new BigNumber(userCashBalance.balance).plus(withDraw.deposit).minus(withDraw.withdraw).toNumber();
+      const UserCashFlowRepository = queryRunner.manager.getRepository(UserCashFlow);
+      await UserCashFlowRepository.save(withDraw);
+      await queryRunner.manager.createQueryBuilder().update(UserCashBalance)
+        .set(userCashBalance)
+        .where('balance - :withdraw >= 0 AND userId = :userId', {
+          withdraw: withDraw.withdraw,
+          userId: withdrawDto.userId
+        })
+        .execute();
+      // commit transaction now
+      await queryRunner.commitTransaction();
+
+    } catch (e) {
+      errorMessage = e.message;
+      // since we have errors let's rollback changes we made
+      await queryRunner.rollbackTransaction();
+    } finally {
+      // you need to release query runner which is manually created:
+      await queryRunner.release();
+      if (errorMessage) throw new Error(errorMessage);
+    }
   }
 
   // Calculate by season
@@ -136,32 +169,51 @@ export class InvestmentService {
 
   // Calculate by season
   public async recordUserSharesBalance(fromAt: string, toAt: string): Promise<void> {
-    const userSharesMap = new Map<bigint, BigNumber>();
-    const userSharesFlowRecords = await getRepository(UserSharesFlow).find({
-      createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${dayjs(fromAt).unix()} AND unix_timestamp(${alias}) < ${dayjs(toAt).unix()}`)
-    });
+    // get a connection and create a new query runner
+    const connection = getConnection();
+    const queryRunner = connection.createQueryRunner();
+    // establish real database connection using our new query runner
+    await queryRunner.connect();
+    // lets now open a new transaction:
+    await queryRunner.startTransaction();
+    try {
+      const userSharesMap = new Map<bigint, BigNumber>();
+      const userSharesFlowRecords = await queryRunner.manager.getRepository(UserSharesFlow).find({
+        createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${dayjs(fromAt).unix()} AND unix_timestamp(${alias}) < ${dayjs(toAt).unix()}`)
+      });
 
-    let totalShares = new BigNumber(0);
-    for (const { userId, invest, disinvest } of userSharesFlowRecords) {
-      userSharesMap[userId] = userSharesMap[userId] ?? 0;
-      const totalAmount = new BigNumber(userSharesMap[userId]);
-      const investAmount = new BigNumber(invest);
-      const disinvestAmount = new BigNumber(disinvest);
-      userSharesMap[userId] = totalAmount.plus(investAmount.minus(disinvestAmount));
-      totalShares = totalShares.plus(userSharesMap[userId]);
-    }
+      let totalShares = new BigNumber(0);
+      for (const { userId, invest, disinvest } of userSharesFlowRecords) {
+        userSharesMap[userId] = userSharesMap[userId] ?? 0;
+        const investAmount = new BigNumber(invest);
+        const disinvestAmount = new BigNumber(disinvest);
+        userSharesMap[userId] = new BigNumber(userSharesMap[userId]).plus(investAmount).minus(disinvestAmount);
+        totalShares = totalShares.plus(investAmount).minus(disinvestAmount);
+      }
 
-    const updateArray = [];
-    for (let [key, value] of Object.entries(userSharesMap)) {
-      const userSharesBalance = new UserSharesBalance();
-      value = new BigNumber(value);
-      userSharesBalance.userId = key;
-      userSharesBalance.balance = value.toString();
-      userSharesBalance.proportion = Number(new BigNumber(value.dividedBy(totalShares) * 100).toFixed(2));
-      userSharesBalance.updatedAt = new Date();
-      updateArray.push(userSharesBalance);
+      const updateArray = [];
+      const userIds = [];
+      for (let [key, value] of Object.entries(userSharesMap)) {
+        const userSharesBalance = new UserSharesBalance();
+        value = new BigNumber(value);
+        userSharesBalance.userId = key;
+        userSharesBalance.balance = value.toString();
+        userSharesBalance.proportion = Number(new BigNumber(value.dividedBy(totalShares) * 100).toFixed(2));
+        userSharesBalance.updatedAt = new Date();
+        updateArray.push(userSharesBalance);
+        userIds.push(key);
+      }
+      await queryRunner.manager.getRepository(UserSharesBalance).delete(userIds);
+      await queryRunner.manager.getRepository(UserSharesBalance).save(updateArray);
+      // commit transaction now
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      // since we have errors let's rollback changes we made
+      await queryRunner.rollbackTransaction();
+    } finally {
+      // you need to release query runner which is manually created
+      await queryRunner.release();
     }
-    await getRepository(UserSharesBalance).save(updateArray);
   }
 
   public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
@@ -212,7 +264,10 @@ export class InvestmentService {
       companySharedProfitBalance.balance = new BigNumber(companySharedProfitBalance.balance).minus(companySharedProfitFlow.outcome).toNumber();
       await queryRunner.manager.createQueryBuilder().update(CompanySharedProfitBalance)
         .set(companySharedProfitBalance)
-        .where('balance - :outcome >= 0', { outcome: companySharedProfitFlow.outcome })
+        .where('balance - :outcome >= 0 AND id = :id', {
+          outcome: companySharedProfitFlow.outcome,
+          id: this._companyProfitBalanceId
+        })
         .execute();
 
       // commit transaction now

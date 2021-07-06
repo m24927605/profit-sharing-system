@@ -54,19 +54,6 @@ export class InvestmentController {
   }
 
   //for develop testing
-  @Post('/company-settle')
-  public async recordSharedProfitBalance(@Body() { season }: any, @Res() res: Response): Promise<void> {
-    try {
-      const { fromAt, toAt } = seasonMap.get(season);
-      await this._investmentService.recordSharedProfitBalance(fromAt, toAt);
-      const passResponse = UtilController.passHandler('company settle successfully.');
-      res.status(passResponse.status).json(passResponse);
-    } catch (e) {
-      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
-    }
-  }
-
-  //for develop testing
   @Post('/user-settle')
   public async recordUserSharesBalance(@Body() { season }: any, @Res() res: Response): Promise<void> {
     try {
