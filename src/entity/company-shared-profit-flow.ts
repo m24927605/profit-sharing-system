@@ -6,7 +6,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class CompanyShareProfitBalance extends BaseEntity {
+export class CompanySharedProfitFlow extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -15,14 +15,21 @@ export class CompanyShareProfitBalance extends BaseEntity {
     precision: 63,
     scale: 2
   })
-  balance: number;
+  income: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 63,
+    scale: 2
+  })
+  outcome: number;
 
   @Column({
     type: 'timestamp',
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

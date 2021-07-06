@@ -40,7 +40,7 @@ export class UserShares {
   id: string;
   userId: string;
   invest: string;
-  withdraw: string;
+  disinvest: string;
 }
 
 export class WithDraw {
@@ -48,4 +48,9 @@ export class WithDraw {
   userId: string;
   withdraw: number;
   deposit: number;
+}
+
+export class UserSharesBalanceData {
+  userId: string;
+  balance: string;
 }

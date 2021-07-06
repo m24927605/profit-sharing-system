@@ -14,8 +14,8 @@ import { ManagerController } from './controller/manager';
 import { InvestmentController } from './controller/investment';
 import { UserController } from './controller/user';
 import { ClaimBooking } from './entity/claim-booking';
-import { CompanyShareProfitBalance } from './entity/company-share-profit-balance';
-import { CompanyShareProfitFlow } from './entity/company-share-profit-flow';
+import { CompanySharedProfitBalance } from './entity/company-shared-profit-balance';
+import { CompanySharedProfitFlow } from './entity/company-shared-profit-flow';
 import { Manager } from './entity/manager';
 import { User } from './entity/user';
 import { UserCashBalance } from './entity/user-cash-balance';
@@ -43,8 +43,8 @@ import { UserService } from './service/user';
       database: process.env.DB_DATABASE,
       entities: [
         ClaimBooking,
-        CompanyShareProfitBalance,
-        CompanyShareProfitFlow,
+        CompanySharedProfitBalance,
+        CompanySharedProfitFlow,
         Manager,
         User,
         UserCashBalance,
@@ -52,7 +52,8 @@ import { UserService } from './service/user';
         UserSharesBalance,
         UserSharesFlow
       ],
-      synchronize: true
+      synchronize: true,
+      logging:true
     })
   ],
   controllers: [

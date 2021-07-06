@@ -1,8 +1,8 @@
 import {
   BaseEntity,
   Column,
-  Entity, PrimaryColumn,
-  PrimaryGeneratedColumn
+  Entity,
+  PrimaryColumn
 } from 'typeorm';
 
 @Entity()
@@ -29,14 +29,14 @@ export class UserSharesFlow extends BaseEntity {
     unsigned: true,
     nullable: false
   })
-  withdraw: string;
+  disinvest: string;
 
   @Column({
     type: 'timestamp',
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',
