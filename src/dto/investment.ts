@@ -1,7 +1,6 @@
 import {
   IsDecimal,
   IsNotEmpty,
-  IsNumber,
   IsString
 } from 'class-validator';
 
@@ -16,9 +15,9 @@ export class InvestDto {
   @IsNotEmpty()
   userId: string;
 
-  @IsNumber()
+  @IsDecimal()
   @IsNotEmpty()
-  amount: number;
+  amount: string;
 }
 
 export class WithdrawDto {
