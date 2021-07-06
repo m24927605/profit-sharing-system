@@ -25,6 +25,7 @@ import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
 import { UtilService } from '../util/service';
+import { SharedProfit } from '../dto/shared-profit';
 
 dayjs.extend(quarterOfYear);
 
@@ -33,22 +34,47 @@ export class InvestmentService {
   private readonly _maxClaimableSeason = Number(process.env.MAX_CLAIM_SEASON);
   private readonly _companyProfitBalanceId = 1;
 
+  public async addProfit(sharedProfit: SharedProfit): Promise<void> {
+    // get a connection and create a new query runner
+    const connection = getConnection();
+    const queryRunner = connection.createQueryRunner();
+    // establish real database connection using our new query runner
+    await queryRunner.connect();
+    // lets now open a new transaction:
+    await queryRunner.startTransaction();
+    try {
+      const shareProfitRepository = queryRunner.manager.getRepository(CompanySharedProfitFlow);
+      await shareProfitRepository.save(sharedProfit);
+      const shareProfitBalanceRepository = queryRunner.manager.getRepository(CompanySharedProfitBalance);
+      const profitBalance = await shareProfitBalanceRepository.findOne(this._companyProfitBalanceId);
+      const companySharedProfitBalance = new CompanySharedProfitBalance();
+      companySharedProfitBalance.id = this._companyProfitBalanceId;
+      const netAddProfit = new BigNumber(sharedProfit.income).minus(sharedProfit.outcome);
+      if (!profitBalance) {
+        companySharedProfitBalance.balance = new BigNumber(netAddProfit).toNumber();
+      } else {
+        companySharedProfitBalance.balance = new BigNumber(profitBalance.balance).plus(netAddProfit).toNumber();
+      }
+      await shareProfitBalanceRepository.save(companySharedProfitBalance);
+      // commit transaction now
+      await queryRunner.commitTransaction();
+    } catch (e) {
+      // since we have errors let's rollback changes we made
+      await queryRunner.rollbackTransaction();
+    } finally {
+      // you need to release query runner which is manually created:
+      await queryRunner.release();
+    }
+  }
+
   public async invest(investDto: InvestDto): Promise<void> {
     const userShares = new UserShares();
     userShares.id = UtilService.genUniqueId();
     userShares.userId = investDto.userId;
     userShares.invest = new BigNumber(investDto.amount).toString();
     userShares.disinvest = new BigNumber(0).toString();
-    const userSharesRepository = getRepository(UserSharesFlow);
-    await userSharesRepository.save(userShares);
-    const userSharesBalance = getRepository(UserSharesBalance);
-    const userSharesBalanceRecord = await userSharesBalance.findOne({ userId: userShares.id });
-    if (!userSharesBalanceRecord) {
-      const userSharesBalanceData = new UserSharesBalanceData();
-      userSharesBalanceData.userId = userShares.id;
-      userSharesBalanceData.balance = new BigNumber(0).toString();
-      await userSharesBalance.save(userSharesBalanceData);
-    }
+    const UserSharesFlowRepository = getRepository(UserSharesFlow);
+    await UserSharesFlowRepository.save(userShares);
   }
 
   public async claim(claimDto: ClaimDto): Promise<void> {
@@ -57,7 +83,12 @@ export class InvestmentService {
     claimBooking.id = UtilService.genUniqueId();
     claimBooking.userId = claimDto.userId;
     const claimBookingRepository = getRepository(ClaimBooking);
-    const claimBookingRecords = await claimBookingRepository.find({ where: { status: ClaimState.INIT } });
+    const claimBookingRecords = await claimBookingRepository.find({
+      where: {
+        status: ClaimState.INIT,
+        userId: claimDto.userId
+      }
+    });
     for (const { createdAt } of claimBookingRecords) {
       const claimSeason = dayjs(createdAt).quarter();
       if (nowSeason === claimSeason) {
@@ -232,7 +263,7 @@ export class InvestmentService {
       }
       // commit transaction now:
       await queryRunner.commitTransaction();
-    } catch (err) {
+    } catch (e) {
       // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {

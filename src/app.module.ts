@@ -25,7 +25,6 @@ import { UserSharesFlow } from './entity/user-shares-flow';
 import { AuthMiddleware } from './middleware/auth';
 import { ManagerService } from './service/manager';
 import { InvestmentService } from './service/investment';
-import { SharedProfitService } from './service/shared-profit';
 import { UserService } from './service/user';
 
 
@@ -65,7 +64,6 @@ import { UserService } from './service/user';
   providers: [
     ManagerService,
     InvestmentService,
-    SharedProfitService,
     UserService
   ]
 })

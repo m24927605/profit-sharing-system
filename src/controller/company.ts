@@ -14,14 +14,12 @@ import {
 } from '../dto/shared-profit';
 import { ResponseType } from './base/response';
 import { InvestmentService } from '../service/investment';
-import { SharedProfitService } from '../service/shared-profit';
 import { UtilController } from '../util/controller';
 
 
 @Controller('/company')
 export class CompanyController {
   constructor(
-    private readonly _sharedProfitService: SharedProfitService,
     private readonly _investmentService: InvestmentService
   ) {
   }
@@ -32,7 +30,7 @@ export class CompanyController {
       const sharedProfit = new SharedProfit();
       sharedProfit.income = new BigNumber(sharedProfitDto.income).toNumber();
       sharedProfit.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
-      await this._sharedProfitService.addProfit(sharedProfit);
+      await this._investmentService.addProfit(sharedProfit);
       const passResponse = UtilController.passHandler('add shared profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
