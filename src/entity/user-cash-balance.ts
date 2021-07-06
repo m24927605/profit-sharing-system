@@ -1,21 +1,22 @@
 import {
   BaseEntity,
   Column,
-  Entity, PrimaryColumn,
-  PrimaryGeneratedColumn
+  Entity,
+  PrimaryColumn,
 } from 'typeorm';
 
 @Entity()
 export class UserCashBalance extends BaseEntity {
   @PrimaryColumn({
-    type: 'bigint',
+    type: 'bigint'
   })
   userId: string;
 
   @Column({
     type: 'decimal',
     precision: 63,
-    scale: 2
+    scale: 2,
+    default: 0
   })
   balance: number;
 
@@ -24,7 +25,7 @@ export class UserCashBalance extends BaseEntity {
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

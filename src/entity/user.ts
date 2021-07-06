@@ -23,7 +23,7 @@ export class User extends BaseEntity {
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

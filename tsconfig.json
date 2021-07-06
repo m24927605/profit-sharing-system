@@ -6,10 +6,12 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "es2017",
+    "target": "es2019",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "incremental": true
+    "incremental": true,
+    "esModuleInterop": true,
+    "lib": ["es2018", "dom", "esnext"]
   }
 }

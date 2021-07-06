@@ -8,17 +8,22 @@ import {
   Res
 } from '@nestjs/common';
 
-import { UtilController } from '../util/controller';
 import {
   SharedProfit,
   SharedProfitDto
 } from '../dto/shared-profit';
-import { SharedProfitService } from '../service/shared-profit';
 import { ResponseType } from './base/response';
+import { InvestmentService } from '../service/investment';
+import { SharedProfitService } from '../service/shared-profit';
+import { UtilController } from '../util/controller';
+
 
 @Controller('/company')
 export class CompanyController {
-  constructor(private readonly _sharedProfitService: SharedProfitService) {
+  constructor(
+    private readonly _sharedProfitService: SharedProfitService,
+    private readonly _investmentService: InvestmentService
+  ) {
   }
 
   @Post('/shared-profit')

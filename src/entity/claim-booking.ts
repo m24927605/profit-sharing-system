@@ -1,9 +1,10 @@
 import {
   BaseEntity,
   Column,
-  Entity, PrimaryColumn,
-  PrimaryGeneratedColumn
+  Entity,
+  PrimaryColumn
 } from 'typeorm';
+import { ClaimState } from '../util/state';
 
 @Entity()
 export class ClaimBooking extends BaseEntity {
@@ -21,14 +22,14 @@ export class ClaimBooking extends BaseEntity {
     type: 'smallint',
     default: 0
   })
-  status: number;
+  status: ClaimState;
 
   @Column({
     type: 'timestamp',
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

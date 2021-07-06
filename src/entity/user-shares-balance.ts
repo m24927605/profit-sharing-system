@@ -1,14 +1,14 @@
 import {
   BaseEntity,
   Column,
-  Entity, PrimaryColumn,
-  PrimaryGeneratedColumn
+  Entity,
+  PrimaryColumn
 } from 'typeorm';
 
 @Entity()
 export class UserSharesBalance extends BaseEntity {
   @PrimaryColumn({
-    type: 'bigint',
+    type: 'bigint'
   })
   userId: string;
 
@@ -20,11 +20,19 @@ export class UserSharesBalance extends BaseEntity {
   balance: string;
 
   @Column({
+    type: 'int',
+    unsigned: true,
+    nullable: false,
+    default: 0
+  })
+  proportion: number;
+
+  @Column({
     type: 'timestamp',
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

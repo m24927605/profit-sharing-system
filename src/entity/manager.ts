@@ -39,7 +39,7 @@ export class Manager extends BaseEntity {
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',

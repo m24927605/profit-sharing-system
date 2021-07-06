@@ -1,8 +1,8 @@
 import {
   BaseEntity,
   Column,
-  Entity, PrimaryColumn,
-  PrimaryGeneratedColumn
+  Entity,
+  PrimaryColumn
 } from 'typeorm';
 
 @Entity()
@@ -36,7 +36,7 @@ export class UserCashFlow extends BaseEntity {
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  updatedAt: number;
+  updatedAt: Date;
 
   @Column({
     type: 'timestamp',
