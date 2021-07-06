@@ -19,12 +19,12 @@ import {
 import { ClaimBooking } from '../entity/claim-booking';
 import { CompanySharedProfitFlow } from '../entity/company-shared-profit-flow';
 import { CompanySharedProfitBalance } from '../entity/company-shared-profit-balance';
+import { UserCashBalance } from '../entity/user-cash-balance';
+import { UserCashFlow } from '../entity/user-cash-flow';
 import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
-import { UserCashFlow } from '../entity/user-cash-flow';
 import { ClaimState } from '../util/state';
 import { UtilService } from '../util/service';
-import { UserCashBalance } from '../entity/user-cash-balance';
 
 dayjs.extend(quarterOfYear);
 
@@ -179,7 +179,10 @@ export class InvestmentService {
       const companySharedProfitBalance = await queryRunner.manager.getRepository(CompanySharedProfitBalance).findOne(this._companyProfitBalanceId);
       companySharedProfitBalance.id = this._companyProfitBalanceId;
       companySharedProfitBalance.balance = new BigNumber(companySharedProfitBalance.balance).minus(companySharedProfitFlow.outcome).toNumber();
-      await queryRunner.manager.getRepository(CompanySharedProfitBalance).save(companySharedProfitBalance);
+      await queryRunner.manager.createQueryBuilder().update(CompanySharedProfitBalance)
+        .set(companySharedProfitBalance)
+        .where('balance - :outcome >= 0', { outcome: companySharedProfitFlow.outcome })
+        .execute();
 
       // commit transaction now
       await queryRunner.commitTransaction();
@@ -202,7 +205,6 @@ export class InvestmentService {
     await queryRunner.startTransaction();
     let totalNeedShareProfit = new BigNumber(0);
     try {
-      console.log('[shareProfitCandidates]', shareProfitCandidates);
       // execute some operations on this transaction:
       for (const [key, value] of Object.entries(shareProfitCandidates)) {
         totalNeedShareProfit = totalNeedShareProfit.plus(value);
