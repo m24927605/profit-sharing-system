@@ -1,0 +1,42 @@
+version: '3'
+services:
+  db:
+    image: mysql:latest
+    container_name: mysql_thundercore
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'thundercore'
+      # So you don't have to use root, but you can if you like
+      MYSQL_USER: 'user'
+      # You can use whatever password you like
+      MYSQL_PASSWORD: 'password'
+      # Password for root access
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      # <Port exposed> : < MySQL Port running inside container>
+      - 3306:3306
+    expose:
+      # Opens port 3306 on the container
+      - '3306'
+      # Where our data will be persisted
+    volumes:
+      - ./db:/var/lib/mysql
+  web:
+    container_name: share-profit-system
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/src
+    command: npm run start
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DB_HOST: host.docker.internal
+      DB_PORT: 3306
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_DATABASE: thundercore
+      JWT_SECRET: thundercore
+      MAX_CLAIM_SEASON: 1
