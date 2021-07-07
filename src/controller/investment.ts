@@ -1,3 +1,4 @@
+import BigNumber from 'bignumber.js';
 import { Response } from 'express';
 import {
   Body,
@@ -7,14 +8,21 @@ import {
   Res
 } from '@nestjs/common';
 
-import { ClaimDto, DisInvestDto, InvestDto, WithdrawDto } from '../dto/investment';
+import {
+  ClaimDto,
+  DisInvestDto,
+  InvestDto,
+  WithdrawDto
+} from '../dto/investment';
+import {
+  SharedProfit,
+  SharedProfitDto
+} from '../dto/shared-profit';
+import { genSeasonDate } from '../util/season';
 import { UtilController } from '../util/controller';
 import { InvestmentService } from '../service/investment';
-
 import { ResponseType } from './base/response';
-import { seasonMap } from '../util/season';
-import { SharedProfit, SharedProfitDto } from '../dto/shared-profit';
-import BigNumber from 'bignumber.js';
+
 
 @Controller('/investment')
 export class InvestmentController {
@@ -79,12 +87,13 @@ export class InvestmentController {
     }
   }
 
-  //for develop testing
+  //for developer testing
   @Post('/user-settle')
   public async recordUserSharesBalance(@Body() { season }: any, @Res() res: Response): Promise<void> {
     try {
+      const seasonMap = genSeasonDate(new Date());
       const { fromAt, toAt } = seasonMap.get(season);
-      await this._investmentService.recordUserSharesBalance(fromAt, toAt);
+      await this._investmentService.settleUserShares(fromAt, toAt);
       const passResponse = UtilController.passHandler('user settle successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
@@ -92,7 +101,7 @@ export class InvestmentController {
     }
   }
 
-  ///for develop testing
+  ///for developer testing
   @Post('/calculate-user-profit')
   public async calculateUserGainProfit(@Body() body: any, @Res() res: Response): Promise<void> {
     try {
@@ -108,7 +117,7 @@ export class InvestmentController {
     }
   }
 
-  //for develop testing
+  //for developer testing
   @Post('/share-profit')
   public async doShareProfit(@Body() body: any, @Res() res: Response): Promise<void> {
     try {
