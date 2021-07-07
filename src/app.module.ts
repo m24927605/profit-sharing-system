@@ -9,7 +9,6 @@ import {
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CompanyController } from './controller/company';
 import { ManagerController } from './controller/manager';
 import { InvestmentController } from './controller/investment';
 import { UserController } from './controller/user';
@@ -56,7 +55,6 @@ import { UserService } from './service/user';
     })
   ],
   controllers: [
-    CompanyController,
     ManagerController,
     InvestmentController,
     UserController,

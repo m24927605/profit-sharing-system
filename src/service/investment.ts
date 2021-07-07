@@ -10,7 +10,7 @@ import {
 import { Injectable } from '@nestjs/common';
 
 import {
-  ClaimDto,
+  ClaimDto, DisInvestDto,
   InvestDto,
   UserShares,
   WithDraw,
@@ -74,6 +74,16 @@ export class InvestmentService {
     userShares.userId = investDto.userId;
     userShares.invest = new BigNumber(investDto.amount).toString();
     userShares.disinvest = new BigNumber(0).toString();
+    const UserSharesFlowRepository = getRepository(UserSharesFlow);
+    await UserSharesFlowRepository.save(userShares);
+  }
+
+  public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
+    const userShares = new UserShares();
+    userShares.id = UtilService.genUniqueId();
+    userShares.userId = disInvestDto.userId;
+    userShares.invest = new BigNumber(0).toString();
+    userShares.disinvest = new BigNumber(disInvestDto.amount).toString();
     const UserSharesFlowRepository = getRepository(UserSharesFlow);
     await UserSharesFlowRepository.save(userShares);
   }
@@ -200,7 +210,7 @@ export class InvestmentService {
         value = new BigNumber(value);
         userSharesBalance.userId = key;
         userSharesBalance.balance = value.toString();
-        userSharesBalance.proportion = Number(new BigNumber(value.dividedBy(totalShares) * 100).toFixed(2));
+        userSharesBalance.proportion = new BigNumber(value.dividedBy(totalShares).times(100)).toNumber();
         userSharesBalance.updatedAt = new Date();
         updateArray.push(userSharesBalance);
         userIds.push(key);
@@ -342,10 +352,6 @@ export class InvestmentService {
       await queryRunner.release();
     }
     return totalNeedShareProfit;
-  }
-
-  public async allocateFund(): Promise<void> {
-    const currentSeason = await this._getCurrentSeason();
   }
 
   private _getCurrentSeason(): number {
