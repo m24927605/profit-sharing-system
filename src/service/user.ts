@@ -14,4 +14,9 @@ export class UserService {
     const userRepository = getRepository(User);
     await userRepository.save(newUser);
   }
+
+  public async list(): Promise<User[]> {
+    const userRepository = getRepository(User);
+    return await userRepository.find();
+  }
 }
