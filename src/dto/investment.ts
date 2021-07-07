@@ -20,6 +20,16 @@ export class InvestDto {
   amount: string;
 }
 
+export class DisInvestDto {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+
+  @IsDecimal()
+  @IsNotEmpty()
+  amount: string;
+}
+
 export class WithdrawDto {
   @IsString()
   @IsNotEmpty()

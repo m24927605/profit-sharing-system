@@ -7,12 +7,14 @@ import {
   Res
 } from '@nestjs/common';
 
-import { ClaimDto, InvestDto, WithdrawDto } from '../dto/investment';
+import { ClaimDto, DisInvestDto, InvestDto, WithdrawDto } from '../dto/investment';
 import { UtilController } from '../util/controller';
 import { InvestmentService } from '../service/investment';
 
 import { ResponseType } from './base/response';
 import { seasonMap } from '../util/season';
+import { SharedProfit, SharedProfitDto } from '../dto/shared-profit';
+import BigNumber from 'bignumber.js';
 
 @Controller('/investment')
 export class InvestmentController {
@@ -22,9 +24,33 @@ export class InvestmentController {
   @Post('/invest')
   public async invest(@Body() investDto: InvestDto, @Res() res: Response): Promise<void> {
     try {
-
       await this._investmentService.invest(investDto);
       const passResponse = UtilController.passHandler('invest successfully.');
+      res.status(passResponse.status).json(passResponse);
+    } catch (e) {
+      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+    }
+  }
+
+  @Post('/disinvest')
+  public async disinvest(@Body() disInvestDto: DisInvestDto, @Res() res: Response): Promise<void> {
+    try {
+      await this._investmentService.disinvest(disInvestDto);
+      const passResponse = UtilController.passHandler('disinvest successfully.');
+      res.status(passResponse.status).json(passResponse);
+    } catch (e) {
+      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
+    }
+  }
+
+  @Post('/add-profit')
+  public async addProfit(@Body() sharedProfitDto: SharedProfitDto, @Res() res: Response): Promise<void> {
+    try {
+      const sharedProfit = new SharedProfit();
+      sharedProfit.income = new BigNumber(sharedProfitDto.income).toNumber();
+      sharedProfit.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
+      await this._investmentService.addProfit(sharedProfit);
+      const passResponse = UtilController.passHandler('add shared profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {
       await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
