@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
-  getRepository,
+  getRepository, QueryRunner,
   Raw
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
@@ -69,23 +69,77 @@ export class InvestmentService {
   }
 
   public async invest(investDto: InvestDto): Promise<void> {
-    const userShares = new UserShares();
-    userShares.id = UtilService.genUniqueId();
-    userShares.userId = investDto.userId;
-    userShares.invest = new BigNumber(investDto.amount).toString();
-    userShares.disinvest = new BigNumber(0).toString();
-    const UserSharesFlowRepository = getRepository(UserSharesFlow);
-    await UserSharesFlowRepository.save(userShares);
+    let errorMessage = '';
+    // get a connection and create a new query runner
+    const connection = getConnection();
+    const queryRunner = connection.createQueryRunner();
+    // establish real database connection using our new query runner
+    await queryRunner.connect();
+    // lets now open a new transaction:
+    await queryRunner.startTransaction();
+    try {
+      const userShares = new UserShares();
+      userShares.id = UtilService.genUniqueId();
+      userShares.userId = investDto.userId;
+      userShares.invest = new BigNumber(investDto.amount).toString();
+      userShares.disinvest = new BigNumber(0).toString();
+      const UserSharesFlowRepository = getRepository(UserSharesFlow);
+      await UserSharesFlowRepository.save(userShares);
+      // commit transaction now
+      await queryRunner.commitTransaction();
+    } catch (e) {
+      errorMessage = e.message;
+      // since we have errors let's rollback changes we made
+      await queryRunner.rollbackTransaction();
+    } finally {
+      // you need to release query runner which is manually created:
+      await queryRunner.release();
+      if (errorMessage) throw new Error(errorMessage);
+    }
+
   }
 
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
-    const userShares = new UserShares();
-    userShares.id = UtilService.genUniqueId();
-    userShares.userId = disInvestDto.userId;
-    userShares.invest = new BigNumber(0).toString();
-    userShares.disinvest = new BigNumber(disInvestDto.amount).toString();
-    const UserSharesFlowRepository = getRepository(UserSharesFlow);
-    await UserSharesFlowRepository.save(userShares);
+    let errorMessage = '';
+    // get a connection and create a new query runner
+    const connection = getConnection();
+    const queryRunner = connection.createQueryRunner();
+    // establish real database connection using our new query runner
+    await queryRunner.connect();
+    // lets now open a new transaction:
+    await queryRunner.startTransaction();
+
+    try {
+      const userShares = new UserShares();
+      userShares.id = UtilService.genUniqueId();
+      userShares.userId = disInvestDto.userId;
+      userShares.invest = new BigNumber(0).toString();
+      userShares.disinvest = new BigNumber(disInvestDto.amount).toString();
+      const UserSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
+      await UserSharesFlowRepository.save(userShares);
+      await this._checkUserCashFlowPositive(disInvestDto.userId, queryRunner);
+      // commit transaction now
+      await queryRunner.commitTransaction();
+    } catch (e) {
+      errorMessage = e.message;
+      // since we have errors let's rollback changes we made
+      await queryRunner.rollbackTransaction();
+    } finally {
+      // you need to release query runner which is manually created:
+      await queryRunner.release();
+      if (errorMessage) throw new Error(errorMessage);
+    }
+  }
+
+  protected async _checkUserCashFlowPositive(userId: string, queryRunner: QueryRunner): Promise<void> {
+    const userSharesFlowRecords = await queryRunner.manager.getRepository(UserSharesFlow).find({ where: { userId } });
+    let netShares = new BigNumber(0);
+    for (const { invest, disinvest } of userSharesFlowRecords) {
+      netShares = netShares.plus(new BigNumber(invest)).minus(disinvest);
+    }
+    if (netShares.isLessThan(0)) {
+      throw new Error('User net shares cannot be less than 0');
+    }
   }
 
   public async claim(claimDto: ClaimDto): Promise<void> {
