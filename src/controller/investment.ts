@@ -87,7 +87,6 @@ export class InvestmentController {
   public async doShareProfit(@Body() body: any, @Res() res: Response): Promise<void> {
     try {
       const result = await this._investmentService.calculateUserGainProfit();
-      console.log(['[result]', result]);
       await this._investmentService.doShareProfit(result);
       const passResponse = UtilController.passHandler('share profit successfully.');
       res.status(passResponse.status).json(passResponse);

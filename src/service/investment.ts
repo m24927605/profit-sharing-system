@@ -4,6 +4,7 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
   getRepository,
+  In,
   Raw
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   WithDraw,
   WithdrawDto
 } from '../dto/investment';
+import { SharedProfit } from '../dto/shared-profit';
 import { ClaimBooking } from '../entity/claim-booking';
 import { CompanySharedProfitFlow } from '../entity/company-shared-profit-flow';
 import { CompanySharedProfitBalance } from '../entity/company-shared-profit-balance';
@@ -24,7 +26,7 @@ import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
 import { UtilService } from '../util/service';
-import { SharedProfit } from '../dto/shared-profit';
+import { seasonMap } from '../util/season';
 
 dayjs.extend(quarterOfYear);
 
@@ -217,17 +219,29 @@ export class InvestmentService {
   }
 
   public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
-    const nowSeason = this._getCurrentSeason();
+    const currentSeason = this._getCurrentSeason();
     const claimBookingRecords = await getRepository(ClaimBooking).find({ status: ClaimState.INIT });
     const shareProfitCandidatesIds = [];
+    const profitExpiredCandidatesIds = [];
     const shareProfitCandidates = new Map();
-    for (const { userId, createdAt } of claimBookingRecords) {
-      const claimSeason = dayjs(createdAt).quarter();
-      if (claimSeason < (nowSeason + this._maxClaimableSeason)) {
-        shareProfitCandidates[userId] = 0;
-        shareProfitCandidatesIds.push(userId);
+    for (const record of claimBookingRecords) {
+      const isClaimInPeriod = dayjs(seasonMap.get(currentSeason).fromAt).subtract(this._maxClaimableSeason * 3, 'months').diff(dayjs(record.createdAt)) <= 0;
+      if (isClaimInPeriod && record.status === ClaimState.INIT) {
+        shareProfitCandidates[record.userId] = 0;
+        shareProfitCandidatesIds.push(record.userId);
+      } else if (record.status === ClaimState.INIT) {
+        profitExpiredCandidatesIds.push(record.userId);
       }
     }
+    if (profitExpiredCandidatesIds.length > 0) {
+      await getConnection()
+        .createQueryBuilder()
+        .update(ClaimBooking)
+        .set({ status: ClaimState.EXPIRED })
+        .where({ userId: In(profitExpiredCandidatesIds) })
+        .execute();
+    }
+
     const CompanyProfitBalanceRepository = getRepository(CompanySharedProfitBalance);
     const { balance: companyProfitBalance } = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
     const userSharesBalanceRecords = await getRepository(UserSharesBalance).findByIds(shareProfitCandidatesIds);
@@ -238,6 +252,9 @@ export class InvestmentService {
   }
 
   public async doShareProfit(shareProfitCandidates: Map<string, BigNumber>): Promise<void> {
+    if (Object.entries(shareProfitCandidates).length === 0) {
+      throw new Error('No need to share profit.');
+    }
     // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
@@ -326,6 +343,10 @@ export class InvestmentService {
       await queryRunner.release();
     }
     return totalNeedShareProfit;
+  }
+
+  public async allocateFund(): Promise<void> {
+    const currentSeason = await this._getCurrentSeason();
   }
 
   private _getCurrentSeason(): number {
