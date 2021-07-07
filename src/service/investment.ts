@@ -255,6 +255,7 @@ export class InvestmentService {
     if (Object.entries(shareProfitCandidates).length === 0) {
       throw new Error('No need to share profit.');
     }
+    let errorMessage = '';
     // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
@@ -266,11 +267,7 @@ export class InvestmentService {
       const totalNeedShareProfit = await this._updateUserCashFlowAndBalance(shareProfitCandidates);
       // check if company needs to share profit
       if (totalNeedShareProfit.toNumber() <= 0) {
-        // commit transaction now
-        await queryRunner.commitTransaction();
-        // you need to release query runner which is manually created
-        await queryRunner.release();
-        return;
+        throw new Error('No need to share profit.');
       }
       const companySharedProfitFlow = new CompanySharedProfitFlow();
       companySharedProfitFlow.income = 0;
@@ -289,12 +286,14 @@ export class InvestmentService {
 
       // commit transaction now
       await queryRunner.commitTransaction();
-    } catch (err) {
+    } catch (e) {
+      errorMessage = e.message;
       // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
       // you need to release query runner which is manually created
       await queryRunner.release();
+      if (errorMessage) throw new Error(errorMessage);
     }
   }
 
