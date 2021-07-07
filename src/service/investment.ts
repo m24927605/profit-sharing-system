@@ -4,13 +4,13 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
   getRepository,
-  In,
   Raw
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
 import {
-  ClaimDto, DisInvestDto,
+  ClaimDto,
+  DisInvestDto,
   InvestDto,
   UserShares,
   WithDraw,
@@ -25,8 +25,8 @@ import { UserCashFlow } from '../entity/user-cash-flow';
 import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
+import { genSeasonDate } from '../util/season';
 import { UtilService } from '../util/service';
-import { seasonMap } from '../util/season';
 
 dayjs.extend(quarterOfYear);
 
@@ -89,7 +89,7 @@ export class InvestmentService {
   }
 
   public async claim(claimDto: ClaimDto): Promise<void> {
-    const nowSeason = dayjs().quarter();
+    const nowDate = new Date();
     const claimBooking = new ClaimBooking();
     claimBooking.id = UtilService.genUniqueId();
     claimBooking.userId = claimDto.userId;
@@ -101,8 +101,12 @@ export class InvestmentService {
       }
     });
     for (const { createdAt } of claimBookingRecords) {
-      const claimSeason = dayjs(createdAt).quarter();
-      if (nowSeason === claimSeason) {
+      const season = dayjs(createdAt).quarter();
+      const seasonMap = genSeasonDate(dayjs(createdAt).toDate());
+      const { fromAt, toAt } = seasonMap.get(season);
+      const isAfterFromAt = dayjs(nowDate).unix() - dayjs(fromAt).unix() >= 0;
+      const isBeforeToAt = dayjs(toAt).unix() - dayjs(nowDate).unix() >= 0;
+      if (isAfterFromAt && isBeforeToAt) {
         throw new Error('Cannot duplicated claim in the same season.');
       }
     }
@@ -180,7 +184,7 @@ export class InvestmentService {
   }
 
   // Calculate by season
-  public async recordUserSharesBalance(fromAt: string, toAt: string): Promise<void> {
+  public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
     // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
@@ -232,24 +236,21 @@ export class InvestmentService {
     const currentSeason = this._getCurrentSeason();
     const claimBookingRecords = await getRepository(ClaimBooking).find({ status: ClaimState.INIT });
     const shareProfitCandidatesIds = [];
-    const profitExpiredCandidatesIds = [];
     const shareProfitCandidates = new Map();
     for (const record of claimBookingRecords) {
+      const seasonMap = genSeasonDate(new Date());
       const isClaimInPeriod = dayjs(seasonMap.get(currentSeason).fromAt).subtract(this._maxClaimableSeason * 3, 'months').diff(dayjs(record.createdAt)) <= 0;
       if (isClaimInPeriod && record.status === ClaimState.INIT) {
         shareProfitCandidates[record.userId] = 0;
         shareProfitCandidatesIds.push(record.userId);
       } else if (record.status === ClaimState.INIT) {
-        profitExpiredCandidatesIds.push(record.userId);
+        await getConnection()
+          .createQueryBuilder()
+          .update(ClaimBooking)
+          .set({ status: ClaimState.EXPIRED })
+          .where({ id: record.id })
+          .execute();
       }
-    }
-    if (profitExpiredCandidatesIds.length > 0) {
-      await getConnection()
-        .createQueryBuilder()
-        .update(ClaimBooking)
-        .set({ status: ClaimState.EXPIRED })
-        .where({ userId: In(profitExpiredCandidatesIds) })
-        .execute();
     }
 
     const CompanyProfitBalanceRepository = getRepository(CompanySharedProfitBalance);
@@ -338,9 +339,18 @@ export class InvestmentService {
         userCashBalance.userId = key;
         userCashBalance.balance = new BigNumber(userCashBalance.balance).plus(new BigNumber(value)).toNumber();
         await queryRunner.manager.getRepository(UserCashBalance).save(userCashBalance);
-        const claimBooking = await queryRunner.manager.getRepository(ClaimBooking).findOne({ userId: key });
+        const claimBooking = await queryRunner.manager.getRepository(ClaimBooking).findOne({
+          userId: key,
+          status: ClaimState.INIT
+        });
         claimBooking.status = ClaimState.FINISH;
-        await queryRunner.manager.getRepository(ClaimBooking).save(claimBooking);
+        await queryRunner.manager.createQueryBuilder().update(ClaimBooking)
+          .set(claimBooking)
+          .where('userId = :userId AND status = :claimState', {
+            userId: key,
+            claimState: ClaimState.INIT
+          })
+          .execute();
       }
       // commit transaction now:
       await queryRunner.commitTransaction();
