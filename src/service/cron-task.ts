@@ -11,6 +11,7 @@ import {
 
 import { InvestmentService } from './investment';
 import { TimeService } from './base';
+import BigNumber from 'bignumber.js';
 
 @Injectable()
 export class CronTaskService {
@@ -29,20 +30,21 @@ export class CronTaskService {
   public async scheduledJob(): Promise<void> {
     const dateFormat = 'YYYY-MM-DD';
     const currentSeason = dayjs().quarter();
-    let shareProfitCandidates;
+    let candidates: Map<string, BigNumber>;
     const seasonDateRange = TimeService.getSeasonDateRange(new Date());
     const { fromAt, toAt } = seasonDateRange.get(currentSeason);
     // settle user shares and calculate user profit at the end of season
     if (dayjs().format(dateFormat) === dayjs(toAt).format(dateFormat)) {
       await this._investmentService.settleUserShares(fromAt, toAt);
-      shareProfitCandidates = await this._investmentService.calculateUserGainProfit();
+      const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
+      candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
     }
-    if (shareProfitCandidates) {
+    if (candidates) {
       // delay 1 day to pay to the user and the paid time will be in the next season
       const oneDayMs = 1000 * 60 * 60 * 24;
       await this._sleep(oneDayMs);
-      await this._investmentService.doShareProfit(shareProfitCandidates);
-      shareProfitCandidates = null;
+      await this._investmentService.doShareProfit(candidates);
+      candidates = null;
     }
   }
 

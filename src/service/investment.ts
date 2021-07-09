@@ -381,17 +381,17 @@ export class InvestmentService {
     return { userIds, updateUserShareRows };
   }
 
-  public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
-    const currentSeason = TimeService.getSeason();
+  /**
+   * Refresh claim_booking table
+   * @return - { shareProfitCandidateIds, shareProfitCandidates }
+   */
+  public async refreshClaimBooking(): Promise<{ shareProfitCandidateIds: string[] }> {
     const claimBookingRecords = await getRepository(ClaimBooking).find({ status: ClaimState.INIT });
-    const shareProfitCandidatesIds = [];
-    const shareProfitCandidates = new Map();
+    const shareProfitCandidateIds = [];
     for (const record of claimBookingRecords) {
-      const seasonDateRange = TimeService.getSeasonDateRange(new Date());
-      const isClaimInPeriod = dayjs(seasonDateRange.get(currentSeason).fromAt).subtract(this._maxClaimableSeason * 3, 'months').diff(dayjs(record.createdAt)) <= 0;
-      if (isClaimInPeriod && record.status === ClaimState.INIT) {
-        shareProfitCandidates[record.userId] = 0;
-        shareProfitCandidatesIds.push(record.userId);
+      const _isClaimDateInPeriod = this._isClaimDateAvailable(record.createdAt);
+      if (_isClaimDateInPeriod && record.status === ClaimState.INIT) {
+        shareProfitCandidateIds.push(record.userId);
       } else if (record.status === ClaimState.INIT) {
         await getConnection()
           .createQueryBuilder()
@@ -401,14 +401,39 @@ export class InvestmentService {
           .execute();
       }
     }
+    return { shareProfitCandidateIds };
+  }
 
+  /**
+   * Is claim date in the max claimable season?
+   * @param createdAt
+   * @private
+   */
+  private _isClaimDateAvailable(createdAt: Date): boolean {
+    const currentSeason = TimeService.getSeason();
+    const seasonDateRange = TimeService.getSeasonDateRange(new Date());
+    const fromAt = seasonDateRange.get(currentSeason).fromAt;
+    const maxClaimableMonths = this._maxClaimableSeason * 3;
+    const earliestAvailableDate = dayjs(fromAt).subtract(maxClaimableMonths, 'months');
+    return earliestAvailableDate.diff(dayjs(createdAt)) <= 0;
+  }
+
+  /**
+   * Calculate the amount that should pay to the user.
+   * @param shareProfitCandidateIds It's a user list that should be paid.
+   * @return payableCandidates - It's a list that company needs to pay.
+   */
+  public async getPayableCandidates(shareProfitCandidateIds: string[]): Promise<Map<string, BigNumber>> {
     const CompanyProfitBalanceRepository = getRepository(CompanySharedProfitBalance);
-    const { balance: companyProfitBalance } = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
-    const userSharesBalanceRecords = await getRepository(UserSharesBalance).findByIds(shareProfitCandidatesIds);
+    const { balance } = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
+    const userSharesBalanceRecords = await getRepository(UserSharesBalance).findByIds(shareProfitCandidateIds);
+    const payableCandidates = new Map<string, BigNumber>();
     for (const { userId, proportion } of userSharesBalanceRecords) {
-      shareProfitCandidates[userId] = new BigNumber(proportion).dividedBy(100).times(new BigNumber(companyProfitBalance));
+      // proportion is base on 100% expression so needs to be divided by 100 to times balance amount.
+      const payableAmount = new BigNumber(proportion).dividedBy(100).times(new BigNumber(balance));
+      payableCandidates.set(userId, payableAmount);
     }
-    return shareProfitCandidates;
+    return payableCandidates;
   }
 
   public async doShareProfit(shareProfitCandidates: Map<string, BigNumber>): Promise<void> {
