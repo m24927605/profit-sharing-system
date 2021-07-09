@@ -101,28 +101,13 @@ export class InvestmentController {
     }
   }
 
-  ///for developer testing
-  @Post('/calculate-user-profit')
-  public async calculateUserGainProfit(@Body() body: any, @Res() res: Response): Promise<void> {
-    try {
-      const data = await this._investmentService.calculateUserGainProfit();
-      const responsseJsonData = {};
-      for (const [key, value] of Object.entries(data)) {
-        responsseJsonData[key] = value.toNumber();
-      }
-      const passResponse = UtilController.passHandler('calculate user profit successfully.', responsseJsonData);
-      res.status(passResponse.status).json(passResponse);
-    } catch (e) {
-      await UtilController.errorHandler(HttpStatus.EXPECTATION_FAILED, ResponseType.ERROR, e.message);
-    }
-  }
-
   //for developer testing
   @Post('/share-profit')
   public async doShareProfit(@Body() body: any, @Res() res: Response): Promise<void> {
     try {
-      const result = await this._investmentService.calculateUserGainProfit();
-      await this._investmentService.doShareProfit(result);
+      const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
+      const candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
+      await this._investmentService.doShareProfit(candidates);
       const passResponse = UtilController.passHandler('share profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {

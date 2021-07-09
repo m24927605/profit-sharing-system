@@ -36,5 +36,5 @@ export class ClaimBooking extends BaseEntity {
     readonly: true,
     default: () => 'CURRENT_TIMESTAMP'
   })
-  createdAt: number;
+  createdAt: Date;
 }
