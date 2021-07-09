@@ -10,7 +10,7 @@ import {
 } from '@nestjs/schedule';
 
 import { InvestmentService } from './investment';
-import { genSeasonDate } from '../util/season';
+import { TimeService } from './base';
 
 @Injectable()
 export class CronTaskService {
@@ -30,8 +30,8 @@ export class CronTaskService {
     const dateFormat = 'YYYY-MM-DD';
     const currentSeason = dayjs().quarter();
     let shareProfitCandidates;
-    const seasonMap = genSeasonDate(new Date());
-    const { fromAt, toAt } = seasonMap.get(currentSeason);
+    const seasonDateRange = TimeService.getSeasonDateRange(new Date());
+    const { fromAt, toAt } = seasonDateRange.get(currentSeason);
     // settle user shares and calculate user profit at the end of season
     if (dayjs().format(dateFormat) === dayjs(toAt).format(dateFormat)) {
       await this._investmentService.settleUserShares(fromAt, toAt);

@@ -26,10 +26,9 @@ import { UserCashFlow } from '../entity/user-cash-flow';
 import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
-import { genSeasonDate } from '../util/season';
 import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
-import { RepositoryService } from './base';
+import { RepositoryService, TimeService } from './base';
 
 dayjs.extend(quarterOfYear);
 
@@ -48,12 +47,10 @@ export class InvestmentService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      // Add a record to company_profit_flow table.
       await RepositoryService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
-      // Calculate the net addProfit from API request.
+      // Calculate the net addProfit from API request.It's convenience for adding or withdrawing using.
       const netAddProfit = MathService.minus(income, outcome).toNumber();
       const profitBalance = await companyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
-      // prepare the payload before insert or update action.
       const companySharedProfitBalance = await this._preInsertOrUpdateCompanyProfitBalance(netAddProfit, profitBalance);
       // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
       await RepositoryService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
@@ -67,6 +64,11 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
+  /**
+   * Prepare the payload before insert or update action.
+   * @param netProfit The net amount is calculated from API request
+   * @param profitBalance The amount is from user_shared_profit_balance
+   */
   private async _preInsertOrUpdateCompanyProfitBalance(netProfit: number, profitBalance: CompanySharedProfitBalance) {
     const companySharedProfitBalance = new CompanySharedProfitBalance();
     companySharedProfitBalance.id = this._companyProfitBalanceId;
@@ -102,11 +104,9 @@ export class InvestmentService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      // Prepare payload before update user_cash_flow table.
-      const userShares = await this._preUpdateUserCashFlow(disInvestDto);
+      const userShares = await InvestmentService._preUpdateUserCashFlow(disInvestDto);
       const userSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
       await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
-      // Need to make sure the net shares of the user is more than 0.
       await this._checkUserNetSharesPositive(disInvestDto.userId, userSharesFlowRepository);
       await queryRunner.commitTransaction();
     } catch (e) {
@@ -118,7 +118,11 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
-  private async _preUpdateUserCashFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
+  /**
+   * Prepare payload before update user_cash_flow table.
+   * @param disInvestDto The object is from API dto
+   */
+  private static async _preUpdateUserCashFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
     const userShares = new UserShares();
     userShares.id = UtilService.genUniqueId();
     userShares.userId = disInvestDto.userId;
@@ -127,6 +131,11 @@ export class InvestmentService {
     return userShares;
   }
 
+  /**
+   * Need to make sure the net shares of the user is more than 0.
+   * @param userId It's the id of the user
+   * @param userSharesRepo The repository is mapping to user_share_flow table
+   */
   protected async _checkUserNetSharesPositive(userId: string, userSharesRepo: Repository<UserShares>): Promise<void> {
     const userSharesFlowRecords = await userSharesRepo.find({ where: { userId } });
     let netShares = new BigNumber(0);
@@ -138,29 +147,31 @@ export class InvestmentService {
     }
   }
 
-  public async claim(claimDto: ClaimDto): Promise<void> {
-    const nowDate = new Date();
-    const claimBooking = new ClaimBooking();
-    claimBooking.id = UtilService.genUniqueId();
-    claimBooking.userId = claimDto.userId;
+  public async claim({ userId }: ClaimDto): Promise<void> {
     const claimBookingRepository = getRepository(ClaimBooking);
     const claimBookingRecords = await claimBookingRepository.find({
       where: {
         status: ClaimState.INIT,
-        userId: claimDto.userId
+        userId
       }
     });
+    await this._checkClaimRecordNotDuplicated(claimBookingRecords);
+    const claimBooking = new ClaimBooking();
+    claimBooking.id = UtilService.genUniqueId();
+    claimBooking.userId = userId;
+    await RepositoryService.insertOrUpdate(claimBookingRepository, claimBooking);
+  }
+
+  private _checkClaimRecordNotDuplicated(claimBookingRecords: ClaimBooking[]) {
+    const nowDate = new Date();
     for (const { createdAt } of claimBookingRecords) {
-      const season = dayjs(createdAt).quarter();
-      const seasonMap = genSeasonDate(dayjs(createdAt).toDate());
-      const { fromAt, toAt } = seasonMap.get(season);
-      const isAfterFromAt = dayjs(nowDate).unix() - dayjs(fromAt).unix() >= 0;
-      const isBeforeToAt = dayjs(toAt).unix() - dayjs(nowDate).unix() >= 0;
-      if (isAfterFromAt && isBeforeToAt) {
+      const season = TimeService.getSeason(createdAt);
+      const seasonDateRange = TimeService.getSeasonDateRange(dayjs(createdAt).toDate());
+      const { fromAt, toAt } = seasonDateRange.get(season);
+      if (TimeService.isInTimePeriod(nowDate, fromAt, toAt)) {
         throw new Error('Cannot duplicated claim in the same season.');
       }
     }
-    await claimBookingRepository.save(claimBooking);
   }
 
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
@@ -276,8 +287,8 @@ export class InvestmentService {
     const shareProfitCandidatesIds = [];
     const shareProfitCandidates = new Map();
     for (const record of claimBookingRecords) {
-      const seasonMap = genSeasonDate(new Date());
-      const isClaimInPeriod = dayjs(seasonMap.get(currentSeason).fromAt).subtract(this._maxClaimableSeason * 3, 'months').diff(dayjs(record.createdAt)) <= 0;
+      const seasonDateRange = TimeService.getSeasonDateRange(new Date());
+      const isClaimInPeriod = dayjs(seasonDateRange.get(currentSeason).fromAt).subtract(this._maxClaimableSeason * 3, 'months').diff(dayjs(record.createdAt)) <= 0;
       if (isClaimInPeriod && record.status === ClaimState.INIT) {
         shareProfitCandidates[record.userId] = 0;
         shareProfitCandidatesIds.push(record.userId);
