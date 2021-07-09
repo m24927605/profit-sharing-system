@@ -4,6 +4,7 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
   getRepository,
+  QueryRunner,
   Raw,
   Repository
 } from 'typeorm';
@@ -37,6 +38,11 @@ export class InvestmentService {
   private readonly _maxClaimableSeason = Number(process.env.MAX_CLAIM_SEASON);
   private readonly _companyProfitBalanceId = 1;
 
+  /**
+   * For adding or updating the company profit.
+   * @param sharedProfit - It's the money that the company want to store in or take it out.
+   * @return void
+   */
   public async addOrUpdateProfit(sharedProfit: SharedProfit): Promise<void> {
     const { income, outcome } = sharedProfit;
     const connection = getConnection();
@@ -66,8 +72,8 @@ export class InvestmentService {
 
   /**
    * Prepare the payload before insert or update action.
-   * @param netProfit The net amount is calculated from API request
-   * @param profitBalance The amount is from user_shared_profit_balance
+   * @param netProfit The net amount is calculated from API request.
+   * @param profitBalance CompanySharedProfitBalance entity.
    */
   private async _preInsertOrUpdateCompanyProfitBalance(netProfit: number, profitBalance: CompanySharedProfitBalance) {
     const companySharedProfitBalance = new CompanySharedProfitBalance();
@@ -81,14 +87,24 @@ export class InvestmentService {
     return companySharedProfitBalance;
   }
 
+  /**
+   * For user invest.
+   * @param investDto It's a DTO object from API request.
+   * @return void
+   */
   public async invest(investDto: InvestDto): Promise<void> {
     const userSharesFlowRepository = getRepository(UserSharesFlow);
     // Prepare the payload before add record to user_shares_flow table.
-    const userShares = this._preInvest(investDto);
+    const userShares = InvestmentService._preInvest(investDto);
     await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
   }
 
-  private _preInvest(investDto: InvestDto): UserShares {
+  /**
+   * Prepare the payload before insert or update action.
+   * @param investDto It's a DTO object from API request.
+   * @return UserShares
+   */
+  private static _preInvest(investDto: InvestDto): UserShares {
     const userShares = new UserShares();
     userShares.id = UtilService.genUniqueId();
     userShares.userId = investDto.userId;
@@ -97,6 +113,11 @@ export class InvestmentService {
     return userShares;
   }
 
+  /**
+   * For user disinvest.
+   * @param disInvestDto It's a DTO object from API request.
+   * @return void
+   */
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
@@ -107,7 +128,8 @@ export class InvestmentService {
       const userShares = await InvestmentService._preUpdateUserCashFlow(disInvestDto);
       const userSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
       await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
-      await this._checkUserNetSharesPositive(disInvestDto.userId, userSharesFlowRepository);
+      // check the user net shares,must be positive value
+      await InvestmentService._checkNetSharePositive(disInvestDto.userId, userSharesFlowRepository);
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
@@ -120,7 +142,8 @@ export class InvestmentService {
 
   /**
    * Prepare payload before update user_cash_flow table.
-   * @param disInvestDto The object is from API dto
+   * @param disInvestDto It's a DTO object from API request.
+   * @return UserShares It's UserShares entity.
    */
   private static async _preUpdateUserCashFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
     const userShares = new UserShares();
@@ -135,8 +158,9 @@ export class InvestmentService {
    * Need to make sure the net shares of the user is more than 0.
    * @param userId It's the id of the user
    * @param userSharesRepo The repository is mapping to user_share_flow table
+   * @return void
    */
-  protected async _checkUserNetSharesPositive(userId: string, userSharesRepo: Repository<UserShares>): Promise<void> {
+  private static async _checkNetSharePositive(userId: string, userSharesRepo: Repository<UserShares>): Promise<void> {
     const userSharesFlowRecords = await userSharesRepo.find({ where: { userId } });
     let netShares = new BigNumber(0);
     for (const { invest, disinvest } of userSharesFlowRecords) {
@@ -147,6 +171,11 @@ export class InvestmentService {
     }
   }
 
+  /**
+   * For user claim the share profit right.
+   * @param userId It's the id of the user.
+   * @return void
+   */
   public async claim({ userId }: ClaimDto): Promise<void> {
     const claimBookingRepository = getRepository(ClaimBooking);
     const claimBookingRecords = await claimBookingRepository.find({
@@ -155,14 +184,19 @@ export class InvestmentService {
         userId
       }
     });
-    await this._checkClaimRecordNotDuplicated(claimBookingRecords);
+    InvestmentService._checkClaimRecordNotDuplicated(claimBookingRecords);
     const claimBooking = new ClaimBooking();
     claimBooking.id = UtilService.genUniqueId();
     claimBooking.userId = userId;
     await RepositoryService.insertOrUpdate(claimBookingRepository, claimBooking);
   }
 
-  private _checkClaimRecordNotDuplicated(claimBookingRecords: ClaimBooking[]) {
+  /**
+   * Check the record is not duplicated.
+   * @param claimBookingRecords It's ClaimBooking entity array data.
+   * @return void
+   */
+  private static _checkClaimRecordNotDuplicated(claimBookingRecords: ClaimBooking[]): void {
     const nowDate = new Date();
     for (const { createdAt } of claimBookingRecords) {
       const season = TimeService.getSeason(createdAt);
@@ -174,35 +208,36 @@ export class InvestmentService {
     }
   }
 
+  /**
+   * For user withdraw the money from the company share the profit.
+   * @param withdrawDto It's a DTO object from API request.
+   * @return void
+   */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
-    let errorMessage = '';
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
+    let errorMessage = '';
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const withDraw = new WithDraw();
-      withDraw.id = UtilService.genUniqueId();
-      withDraw.userId = withdrawDto.userId;
-      withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
-      withDraw.deposit = new BigNumber(0).toNumber();
       const UserCashBalanceRepository = queryRunner.manager.getRepository(UserCashBalance);
       const userCashBalance = await UserCashBalanceRepository.findOne(withdrawDto.userId);
-      if (userCashBalance.balance < withDraw.withdraw) {
-        throw new Error('Withdraw amount must small than balance.');
-      }
-      userCashBalance.balance = new BigNumber(userCashBalance.balance).plus(withDraw.deposit).minus(withDraw.withdraw).toNumber();
+      // check the data from user_cash_balance table
+      InvestmentService._checkUserCashBalance(userCashBalance);
+      const withdrawData = InvestmentService._preInsertOrUpdateUserCashFlow(withdrawDto);
+      const { balance: balanceAmount } = userCashBalance;
+      const withdrawAmount = withdrawData.withdraw;
+      const depositAmount = withdrawData.deposit;
+      // before access table do some general check
+      await InvestmentService._checkWithdrawAmountLessThanBalance(withdrawAmount, balanceAmount);
+      const newUserCashBalance = userCashBalance;
+      newUserCashBalance.balance = MathService.plus(balanceAmount, depositAmount).minus(withdrawAmount).toNumber();
+      // update user_cash_balance table
+      await InvestmentService._updateUserCashBalance(newUserCashBalance, withdrawData, queryRunner);
       const UserCashFlowRepository = queryRunner.manager.getRepository(UserCashFlow);
-      await UserCashFlowRepository.save(withDraw);
-      await queryRunner.manager.createQueryBuilder().update(UserCashBalance)
-        .set(userCashBalance)
-        .where('balance - :withdraw >= 0 AND userId = :userId', {
-          withdraw: withDraw.withdraw,
-          userId: withdrawDto.userId
-        })
-        .execute();
+      // insert user_cash_flow table
+      await RepositoryService.insertOrUpdate(UserCashFlowRepository, withdrawData);
       await queryRunner.commitTransaction();
-
     } catch (e) {
       errorMessage = e.message;
       await queryRunner.rollbackTransaction();
@@ -212,30 +247,59 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
-  // Calculate by season
-  public async recordSharedProfitBalance(fromAt: string, toAt: string): Promise<void> {
-    const companyProfitRecords = await getRepository(CompanySharedProfitFlow).find({
-      createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${dayjs(fromAt).unix()} AND unix_timestamp(${alias}) < ${dayjs(toAt).unix()}`)
-    });
-    let netIncome = 0;
-    for (const { income, outcome } of companyProfitRecords) {
-      netIncome = new BigNumber(netIncome).plus(new BigNumber(income)).minus(new BigNumber(outcome)).toNumber();
+  /**
+   * Check the balance in user_cash_balance table.
+   * @param userCashBalance It's UserCashBalance entity.
+   * @return void
+   */
+  private static _checkUserCashBalance(userCashBalance: UserCashBalance): void {
+    if (!userCashBalance) {
+      throw  new Error('The balance of the user is 0.');
     }
-    const CompanyProfitBalanceRepository = getRepository(CompanySharedProfitBalance);
-    let companyProfitBalance = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
-    if (!companyProfitBalance) {
-      const companyProfitBalance = new CompanySharedProfitBalance();
-      companyProfitBalance.id = this._companyProfitBalanceId;
-      companyProfitBalance.balance = 0;
-      await CompanyProfitBalanceRepository.save(companyProfitBalance);
+  }
+
+  /**
+   * Check the withdraw amount is less than balance amount or not.
+   * @param withdraw It's withdraw amount.
+   * @param balance It's balance amount.
+   * @return void
+   */
+  private static _checkWithdrawAmountLessThanBalance(withdraw: number, balance: number): void {
+    if (new BigNumber(withdraw).isGreaterThan(new BigNumber(balance))) {
+      throw new Error('Withdraw amount must less than balance.');
     }
-    companyProfitBalance = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
-    const balance = new BigNumber(companyProfitBalance.balance).plus(new BigNumber(netIncome)).toNumber();
-    await CompanyProfitBalanceRepository.update(
-      { id: this._companyProfitBalanceId }, {
-        balance,
-        updatedAt: new Date()
-      });
+  }
+
+  /**
+   * Prepare the payload for insert or update user_cash_flow table.
+   * @param withdrawDto It's a DTO object from API request.
+   * @return WithDraw It's WithDraw entity.
+   */
+  private static _preInsertOrUpdateUserCashFlow(withdrawDto: WithdrawDto): WithDraw {
+    const withDraw = new WithDraw();
+    withDraw.id = UtilService.genUniqueId();
+    withDraw.userId = withdrawDto.userId;
+    withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
+    withDraw.deposit = new BigNumber(0).toNumber();
+    return withDraw;
+  }
+
+  /**
+   * Update user_cash_balance table.
+   * @param userCashBalance It's UserCashBalance entity.
+   * @param withDraw It's WithDraw entity.
+   * @param sql It's TypeORM queryRunner.
+   * @return void
+   */
+  private static async _updateUserCashBalance(userCashBalance: UserCashBalance, withDraw: WithDraw, sql: QueryRunner)
+    : Promise<void> {
+    await sql.manager.createQueryBuilder().update(UserCashBalance)
+      .set(userCashBalance)
+      .where('balance - :withdraw >= 0 AND userId = :userId', {
+        withdraw: withDraw.withdraw,
+        userId: withDraw.userId
+      })
+      .execute();
   }
 
   // Calculate by season
@@ -282,7 +346,7 @@ export class InvestmentService {
   }
 
   public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
-    const currentSeason = InvestmentService._getCurrentSeason();
+    const currentSeason = TimeService.getSeason();
     const claimBookingRecords = await getRepository(ClaimBooking).find({ status: ClaimState.INIT });
     const shareProfitCandidatesIds = [];
     const shareProfitCandidates = new Map();
@@ -398,9 +462,5 @@ export class InvestmentService {
       await queryRunner.release();
     }
     return totalNeedShareProfit;
-  }
-
-  private static _getCurrentSeason(): number {
-    return dayjs().quarter();
   }
 }
