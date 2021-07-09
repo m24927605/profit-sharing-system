@@ -5,7 +5,7 @@ import {
   getConnection,
   getRepository,
   QueryRunner,
-  Raw,
+  Raw
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
@@ -70,9 +70,9 @@ export class InvestmentService {
   private async _preInsertOrUpdateCompanyProfitBalance(netProfit: number, profitBalance: CompanySharedProfitBalance) {
     const companySharedProfitBalance = new CompanySharedProfitBalance();
     companySharedProfitBalance.id = this._companyProfitBalanceId;
-    if (!profitBalance) {
-      companySharedProfitBalance.balance = netProfit;
-    } else {
+    companySharedProfitBalance.balance = netProfit;
+    // If profitBalance exists,balance should be the old amount add new netProfit.
+    if (profitBalance) {
       const { balance } = profitBalance;
       companySharedProfitBalance.balance = MathService.plus(balance, netProfit).toNumber();
     }
