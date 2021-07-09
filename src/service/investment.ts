@@ -36,7 +36,7 @@ dayjs.extend(quarterOfYear);
 @Injectable()
 export class InvestmentService {
   private readonly _maxClaimableSeason = Number(process.env.MAX_CLAIM_SEASON);
-  private readonly _companyProfitBalanceId = 1;
+  private readonly _companyId = 1;
 
   /**
    * For adding or updating the company profit.
@@ -56,7 +56,7 @@ export class InvestmentService {
       await RepositoryService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
       // Calculate the net addProfit from API request.It's convenience for adding or withdrawing using.
       const netAddProfit = MathService.minus(income, outcome).toNumber();
-      const profitBalance = await companyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
+      const profitBalance = await companyProfitBalanceRepository.findOne(this._companyId);
       const companySharedProfitBalance = await this._preInsertOrUpdateCompanyProfitBalance(netAddProfit, profitBalance);
       // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
       await RepositoryService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
@@ -77,7 +77,7 @@ export class InvestmentService {
    */
   private async _preInsertOrUpdateCompanyProfitBalance(netProfit: number, profitBalance: CompanySharedProfitBalance) {
     const companySharedProfitBalance = new CompanySharedProfitBalance();
-    companySharedProfitBalance.id = this._companyProfitBalanceId;
+    companySharedProfitBalance.id = this._companyId;
     companySharedProfitBalance.balance = netProfit;
     // If profitBalance exists,balance should be the old amount add new netProfit.
     if (profitBalance) {
@@ -345,8 +345,8 @@ export class InvestmentService {
    * @return - {totalShares,userSharesMap}
    */
   private static _calculateUserShares(userSharesRecords: UserSharesFlow[])
-    : { totalShares: number, userSharesMap: Map<bigint, BigNumber> } {
-    const userSharesMap = new Map<bigint, BigNumber>();
+    : { totalShares: number, userSharesMap: Map<string, BigNumber> } {
+    const userSharesMap = new Map<string, BigNumber>();
     let totalShares = new BigNumber(0).toNumber();
     for (const { userId, invest, disinvest } of userSharesRecords) {
       userSharesMap[userId] = userSharesMap[userId] ?? 0;
@@ -364,19 +364,18 @@ export class InvestmentService {
    * @param userSharesMap It's a map that store every user's shares.
    * @return - { userIds, updateUserShareRows }
    */
-  private static preUpdateUserShare(totalShares: number, userSharesMap: Map<bigint, BigNumber>)
+  private static preUpdateUserShare(totalShares: number, userSharesMap: Map<string, BigNumber>)
     : { userIds: string[], updateUserShareRows: UserSharesBalance[] } {
     const updateUserShareRows = [];
     const userIds = [];
-    for (let [key, value] of Object.entries(userSharesMap)) {
+    for (const [userId, balance] of userSharesMap.entries()) {
       const userSharesBalance = new UserSharesBalance();
-      value = new BigNumber(value);
-      userSharesBalance.userId = key;
-      userSharesBalance.balance = value.toString();
-      userSharesBalance.proportion = new BigNumber(value.dividedBy(totalShares).times(100)).toNumber();
+      userSharesBalance.userId = userId;
+      userSharesBalance.balance = balance.toString();
+      userSharesBalance.proportion = new BigNumber(balance.dividedBy(totalShares).times(100)).toNumber();
       userSharesBalance.updatedAt = new Date();
       updateUserShareRows.push(userSharesBalance);
-      userIds.push(key);
+      userIds.push(userId);
     }
     return { userIds, updateUserShareRows };
   }
@@ -425,7 +424,7 @@ export class InvestmentService {
    */
   public async getPayableCandidates(shareProfitCandidateIds: string[]): Promise<Map<string, BigNumber>> {
     const CompanyProfitBalanceRepository = getRepository(CompanySharedProfitBalance);
-    const { balance } = await CompanyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
+    const { balance } = await CompanyProfitBalanceRepository.findOne(this._companyId);
     const userSharesBalanceRecords = await getRepository(UserSharesBalance).findByIds(shareProfitCandidateIds);
     const payableCandidates = new Map<string, BigNumber>();
     for (const { userId, proportion } of userSharesBalanceRecords) {
@@ -436,36 +435,29 @@ export class InvestmentService {
     return payableCandidates;
   }
 
-  public async doShareProfit(shareProfitCandidates: Map<string, BigNumber>): Promise<void> {
-    if (Object.entries(shareProfitCandidates).length === 0) {
-      throw new Error('No need to share profit.');
-    }
-    let errorMessage = '';
+  public async doShareProfit(payableCandidates: Map<string, BigNumber>): Promise<void> {
+    await InvestmentService._checkCandidates(payableCandidates);
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
+    let errorMessage = '';
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const totalNeedShareProfit = await InvestmentService._updateUserCashFlowAndBalance(shareProfitCandidates);
-      // check if company needs to share profit
-      if (totalNeedShareProfit.toNumber() <= 0) {
-        throw new Error('No need to share profit.');
-      }
-      const companySharedProfitFlow = new CompanySharedProfitFlow();
-      companySharedProfitFlow.income = 0;
-      companySharedProfitFlow.outcome = totalNeedShareProfit.toNumber();
+      const totalPayableProfit = InvestmentService._calculateTotalPayableAmount(payableCandidates);
+      await InvestmentService._checkIfCompanyNeedPay(totalPayableProfit);
+      await InvestmentService._updatePayableUserCashFlow(payableCandidates, queryRunner);
+      await InvestmentService._updatePayableUserCashBalance(payableCandidates, queryRunner);
+      const companySharedProfitFlow = InvestmentService._preInsertCompanySharedProfitFlow(totalPayableProfit);
       await queryRunner.manager.getRepository(CompanySharedProfitFlow).insert(companySharedProfitFlow);
-      const companySharedProfitBalance = await queryRunner.manager.getRepository(CompanySharedProfitBalance).findOne(this._companyProfitBalanceId);
-      companySharedProfitBalance.id = this._companyProfitBalanceId;
-      companySharedProfitBalance.balance = new BigNumber(companySharedProfitBalance.balance).minus(companySharedProfitFlow.outcome).toNumber();
+      const { outcome } = companySharedProfitFlow;
+      const updateProfitBalance = await InvestmentService._preUpdateCompProfitBalance(this._companyId, outcome, queryRunner);
       await queryRunner.manager.createQueryBuilder().update(CompanySharedProfitBalance)
-        .set(companySharedProfitBalance)
+        .set(updateProfitBalance)
         .where('balance - :outcome >= 0 AND id = :id', {
-          outcome: companySharedProfitFlow.outcome,
-          id: this._companyProfitBalanceId
+          outcome,
+          id: this._companyId
         })
         .execute();
-
       await queryRunner.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
@@ -476,52 +468,110 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
-  private static async _updateUserCashFlowAndBalance(shareProfitCandidates: Map<string, BigNumber>): Promise<BigNumber> {
-    const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  private static _checkCandidates(payableCandidates: Map<string, BigNumber>) {
+    if (payableCandidates.size === 0) {
+      throw new Error('No need to share profit.');
+    }
+  }
+
+  private static _calculateTotalPayableAmount(shareProfitCandidates: Map<string, BigNumber>) {
     let totalNeedShareProfit = new BigNumber(0);
-    try {
-      for (const [key, value] of Object.entries(shareProfitCandidates)) {
-        totalNeedShareProfit = totalNeedShareProfit.plus(value);
-        const userCashFlow = new UserCashFlow();
-        userCashFlow.id = UtilService.genUniqueId();
-        userCashFlow.userId = key;
-        userCashFlow.deposit = new BigNumber(value).toNumber();
-        userCashFlow.withdraw = 0;
-        const userCashFlowRepository = await queryRunner.manager.getRepository(UserCashFlow);
-        await userCashFlowRepository.save(userCashFlow);
-        let userCashBalance = await queryRunner.manager.getRepository(UserCashBalance).findOne(key);
-        if (!userCashBalance) {
-          const userCashBalance = new UserCashBalance();
-          userCashBalance.userId = key;
-          userCashBalance.balance = 0;
-          await queryRunner.manager.getRepository(UserCashBalance).save(userCashBalance);
-        }
-        userCashBalance = await queryRunner.manager.getRepository(UserCashBalance).findOne(key);
-        userCashBalance.userId = key;
-        userCashBalance.balance = new BigNumber(userCashBalance.balance).plus(new BigNumber(value)).toNumber();
-        await queryRunner.manager.getRepository(UserCashBalance).save(userCashBalance);
-        const claimBooking = await queryRunner.manager.getRepository(ClaimBooking).findOne({
-          userId: key,
-          status: ClaimState.INIT
-        });
-        claimBooking.status = ClaimState.FINISH;
-        await queryRunner.manager.createQueryBuilder().update(ClaimBooking)
-          .set(claimBooking)
-          .where('userId = :userId AND status = :claimState', {
-            userId: key,
-            claimState: ClaimState.INIT
-          })
-          .execute();
-      }
-      await queryRunner.commitTransaction();
-    } catch (e) {
-      await queryRunner.rollbackTransaction();
-    } finally {
-      await queryRunner.release();
+    for (const value of shareProfitCandidates.values()) {
+      totalNeedShareProfit = MathService.plus(totalNeedShareProfit.toNumber(), value.toNumber());
     }
     return totalNeedShareProfit;
+  }
+
+  private static _checkIfCompanyNeedPay(totalPayableProfit: BigNumber) {
+    // check if company needs to share profit
+    if (totalPayableProfit.toNumber() <= 0) {
+      throw new Error('No need to share profit.');
+    }
+  }
+
+  private static async _updatePayableUserCashFlow(profitCandidates: Map<string, BigNumber>, queryRunner: QueryRunner) {
+    for (const [userId, payableAmount] of profitCandidates.entries()) {
+      await InvestmentService._allocateFunds(userId, payableAmount.toNumber(), queryRunner);
+    }
+  }
+
+  private static async _allocateFunds(userId, payableAmount: number, queryRunner: QueryRunner) {
+    const userCashFlow = new UserCashFlow();
+    userCashFlow.id = UtilService.genUniqueId();
+    userCashFlow.userId = userId;
+    userCashFlow.deposit = new BigNumber(payableAmount).toNumber();
+    userCashFlow.withdraw = 0;
+    const userCashFlowRepository = await queryRunner.manager.getRepository(UserCashFlow);
+    await RepositoryService.insertOrUpdate(userCashFlowRepository, userCashFlow);
+  }
+
+  private static async _updatePayableUserCashBalance(profitCandidates: Map<string, BigNumber>, sql: QueryRunner)
+    : Promise<void> {
+    const userCashBalanceRepository = sql.manager.getRepository(UserCashBalance);
+    const claimBookingRepository = sql.manager.getRepository(ClaimBooking);
+    for (const [userId, payableAmount] of profitCandidates.entries()) {
+      // allocate the payable amount to user
+      let userCashBalance = await sql.manager.getRepository(UserCashBalance).findOne(userId);
+      // check the record exists in user_cash_balance table,create a record if not exists.
+      await InvestmentService._checkUserCashBalanceRecords(userId, userCashBalance, sql);
+      // get record again
+      userCashBalance = await sql.manager.getRepository(UserCashBalance).findOne(userId);
+      const updateBalance = MathService.plus(userCashBalance.balance, payableAmount).toNumber();
+      // prepare payload before updating user_cash_balance table
+      const updateCashBalance = await InvestmentService._preUpdateUserCashBalance(userId, updateBalance, sql);
+      // update user_cash_balance table
+      await RepositoryService.insertOrUpdate(userCashBalanceRepository, updateCashBalance);
+      const claimBooking = await claimBookingRepository.findOne({
+        userId,
+        status: ClaimState.INIT
+      });
+      claimBooking.status = ClaimState.FINISH;
+      // update the status to FINISH state in claim_booking table
+      await sql.manager.createQueryBuilder().update(ClaimBooking)
+        .set(claimBooking)
+        .where('userId = :userId AND status = :claimState', {
+          userId,
+          claimState: ClaimState.INIT
+        })
+        .execute();
+    }
+  }
+
+  private static async _checkUserCashBalanceRecords(userId: string, cashBalance: UserCashBalance, sql: QueryRunner) {
+    if (!cashBalance) {
+      await InvestmentService._initializeUserCashBalance(userId, sql);
+    }
+  }
+
+  private static async _initializeUserCashBalance(userId: string, queryRunner: QueryRunner): Promise<void> {
+    const userCashBalance = new UserCashBalance();
+    userCashBalance.userId = userId;
+    userCashBalance.balance = 0;
+    const userCashBalanceRepository = await queryRunner.manager.getRepository(UserCashBalance);
+    await RepositoryService.insertOrUpdate(userCashBalanceRepository, userCashBalance);
+  }
+
+  private static async _preUpdateUserCashBalance(userId: string, balance: number, queryRunner: QueryRunner)
+    : Promise<UserCashBalance> {
+    const updateCashBalance = await queryRunner.manager.getRepository(UserCashBalance).findOne(userId);
+    updateCashBalance.userId = userId;
+    updateCashBalance.balance = balance;
+    return updateCashBalance;
+  }
+
+  private static _preInsertCompanySharedProfitFlow(totalPayableProfit: BigNumber): CompanySharedProfitFlow {
+    const companySharedProfitFlow = new CompanySharedProfitFlow();
+    companySharedProfitFlow.income = 0;
+    companySharedProfitFlow.outcome = totalPayableProfit.toNumber();
+    return companySharedProfitFlow;
+  }
+
+  private static async _preUpdateCompProfitBalance(companyId: number, outcome: number, queryRunner: QueryRunner)
+    : Promise<CompanySharedProfitBalance> {
+    const companyProfitBalance = await queryRunner.manager.getRepository(CompanySharedProfitBalance).findOne(companyId);
+    const updateBalance = new BigNumber(companyProfitBalance.balance).minus(outcome).toNumber();
+    companyProfitBalance.id = companyId;
+    companyProfitBalance.balance = updateBalance;
+    return companyProfitBalance;
   }
 }
