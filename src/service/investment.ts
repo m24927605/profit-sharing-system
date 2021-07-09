@@ -4,8 +4,8 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
   getRepository,
-  QueryRunner,
-  Raw
+  Raw,
+  Repository
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
@@ -29,7 +29,7 @@ import { ClaimState } from '../util/state';
 import { genSeasonDate } from '../util/season';
 import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
-import { BaseService } from './base';
+import { RepositoryService } from './base';
 
 dayjs.extend(quarterOfYear);
 
@@ -49,14 +49,14 @@ export class InvestmentService {
     await queryRunner.startTransaction();
     try {
       // Add a record to company_profit_flow table.
-      await BaseService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
+      await RepositoryService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
       // Calculate the net addProfit from API request.
       const netAddProfit = MathService.minus(income, outcome).toNumber();
       const profitBalance = await companyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
       // prepare the payload before insert or update action.
       const companySharedProfitBalance = await this._preInsertOrUpdateCompanyProfitBalance(netAddProfit, profitBalance);
       // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
-      await BaseService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
+      await RepositoryService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
@@ -83,7 +83,7 @@ export class InvestmentService {
     const userSharesFlowRepository = getRepository(UserSharesFlow);
     // Prepare the payload before add record to user_shares_flow table.
     const userShares = this._preInvest(investDto);
-    await BaseService.insertOrUpdate(userSharesFlowRepository, userShares);
+    await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
   }
 
   private _preInvest(investDto: InvestDto): UserShares {
@@ -96,21 +96,18 @@ export class InvestmentService {
   }
 
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
-    let errorMessage = '';
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
+    let errorMessage = '';
     await queryRunner.connect();
     await queryRunner.startTransaction();
-
     try {
-      const userShares = new UserShares();
-      userShares.id = UtilService.genUniqueId();
-      userShares.userId = disInvestDto.userId;
-      userShares.invest = new BigNumber(0).toString();
-      userShares.disinvest = new BigNumber(disInvestDto.amount).toString();
-      const UserSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
-      await UserSharesFlowRepository.save(userShares);
-      await this._checkUserCashFlowPositive(disInvestDto.userId, queryRunner);
+      // Prepare payload before update user_cash_flow table.
+      const userShares = await this._preUpdateUserCashFlow(disInvestDto);
+      const userSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
+      await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
+      // Need to make sure the net shares of the user is more than 0.
+      await this._checkUserNetSharesPositive(disInvestDto.userId, userSharesFlowRepository);
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
@@ -121,8 +118,17 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
-  protected async _checkUserCashFlowPositive(userId: string, queryRunner: QueryRunner): Promise<void> {
-    const userSharesFlowRecords = await queryRunner.manager.getRepository(UserSharesFlow).find({ where: { userId } });
+  private async _preUpdateUserCashFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
+    const userShares = new UserShares();
+    userShares.id = UtilService.genUniqueId();
+    userShares.userId = disInvestDto.userId;
+    userShares.invest = new BigNumber(0).toString();
+    userShares.disinvest = new BigNumber(disInvestDto.amount).toString();
+    return userShares;
+  }
+
+  protected async _checkUserNetSharesPositive(userId: string, userSharesRepo: Repository<UserShares>): Promise<void> {
+    const userSharesFlowRecords = await userSharesRepo.find({ where: { userId } });
     let netShares = new BigNumber(0);
     for (const { invest, disinvest } of userSharesFlowRecords) {
       netShares = netShares.plus(new BigNumber(invest)).minus(disinvest);
