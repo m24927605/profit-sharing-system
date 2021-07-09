@@ -61,8 +61,8 @@ export class InvestmentService {
       // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
       await RepositoryService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
       await queryRunner.commitTransaction();
-    } catch (e) {
-      errorMessage = e.message;
+    } catch (error) {
+      errorMessage = error.message;
       await queryRunner.rollbackTransaction();
     } finally {
       await queryRunner.release();
@@ -131,8 +131,8 @@ export class InvestmentService {
       // check the user net shares,must be positive value
       await InvestmentService._checkNetSharePositive(disInvestDto.userId, userSharesFlowRepository);
       await queryRunner.commitTransaction();
-    } catch (e) {
-      errorMessage = e.message;
+    } catch (error) {
+      errorMessage = error.message;
       await queryRunner.rollbackTransaction();
     } finally {
       await queryRunner.release();
@@ -238,8 +238,8 @@ export class InvestmentService {
       // insert user_cash_flow table
       await RepositoryService.insertOrUpdate(UserCashFlowRepository, withdrawData);
       await queryRunner.commitTransaction();
-    } catch (e) {
-      errorMessage = e.message;
+    } catch (error) {
+      errorMessage = error.message;
       await queryRunner.rollbackTransaction();
     } finally {
       await queryRunner.release();
@@ -302,47 +302,83 @@ export class InvestmentService {
       .execute();
   }
 
-  // Calculate by season
+  /**
+   * Settle user's investment shares.
+   * @param fromAt It's started date about settle.
+   * @param toAt It's ended date about settle.
+   * @return void
+   */
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
+    let errorMessage = '';
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const userSharesMap = new Map<bigint, BigNumber>();
+      const fromAtUnix = dayjs(fromAt).unix();
+      const toAtUnix = dayjs(toAt).unix();
       const userSharesFlowRecords = await queryRunner.manager.getRepository(UserSharesFlow).find({
-        createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${dayjs(fromAt).unix()} AND unix_timestamp(${alias}) < ${dayjs(toAt).unix()}`)
+        createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${fromAtUnix} AND unix_timestamp(${alias}) < ${toAtUnix}`)
       });
-
-      let totalShares = new BigNumber(0);
-      for (const { userId, invest, disinvest } of userSharesFlowRecords) {
-        userSharesMap[userId] = userSharesMap[userId] ?? 0;
-        const investAmount = new BigNumber(invest);
-        const disinvestAmount = new BigNumber(disinvest);
-        userSharesMap[userId] = new BigNumber(userSharesMap[userId]).plus(investAmount).minus(disinvestAmount);
-        totalShares = totalShares.plus(investAmount).minus(disinvestAmount);
-      }
-
-      const updateArray = [];
-      const userIds = [];
-      for (let [key, value] of Object.entries(userSharesMap)) {
-        const userSharesBalance = new UserSharesBalance();
-        value = new BigNumber(value);
-        userSharesBalance.userId = key;
-        userSharesBalance.balance = value.toString();
-        userSharesBalance.proportion = new BigNumber(value.dividedBy(totalShares).times(100)).toNumber();
-        userSharesBalance.updatedAt = new Date();
-        updateArray.push(userSharesBalance);
-        userIds.push(key);
-      }
-      await queryRunner.manager.getRepository(UserSharesBalance).delete(userIds);
-      await queryRunner.manager.getRepository(UserSharesBalance).save(updateArray);
+      // Calculate user shares
+      const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
+      // Prepare payload before insert or update user_shares_balance table
+      const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShare(totalShares, userSharesMap);
+      const userShareBalanceRepository = queryRunner.manager.getRepository(UserSharesBalance);
+      // Delete old data
+      await userShareBalanceRepository.delete(userIds);
+      // Insert or update user_shares_balance table
+      await RepositoryService.insertOrUpdate(userShareBalanceRepository, updateUserShareRows);
       await queryRunner.commitTransaction();
-    } catch (err) {
+    } catch (error) {
+      errorMessage = error.message;
       await queryRunner.rollbackTransaction();
     } finally {
       await queryRunner.release();
     }
+    if (errorMessage) throw new Error(errorMessage);
+  }
+
+  /**
+   * Calculate user's investment shares.
+   * @param userSharesRecords It's records from user_shares_flow table
+   * @return - {totalShares,userSharesMap}
+   */
+  private static _calculateUserShares(userSharesRecords: UserSharesFlow[])
+    : { totalShares: number, userSharesMap: Map<bigint, BigNumber> } {
+    const userSharesMap = new Map<bigint, BigNumber>();
+    let totalShares = new BigNumber(0).toNumber();
+    for (const { userId, invest, disinvest } of userSharesRecords) {
+      userSharesMap[userId] = userSharesMap[userId] ?? 0;
+      const investAmount = new BigNumber(invest);
+      const disinvestAmount = new BigNumber(disinvest);
+      userSharesMap[userId] = MathService.plus(userSharesMap[userId], investAmount).minus(disinvestAmount);
+      totalShares = MathService.plus(totalShares, investAmount).minus(disinvestAmount).toNumber();
+    }
+    return { totalShares, userSharesMap };
+  }
+
+  /**
+   * Prepare payload for update user_shares_balance table
+   * @param totalShares It's a total number about the whole shares.
+   * @param userSharesMap It's a map that store every user's shares.
+   * @return - { userIds, updateUserShareRows }
+   */
+  private static preUpdateUserShare(totalShares: number, userSharesMap: Map<bigint, BigNumber>)
+    : { userIds: string[], updateUserShareRows: UserSharesBalance[] } {
+    const updateUserShareRows = [];
+    const userIds = [];
+    for (let [key, value] of Object.entries(userSharesMap)) {
+      const userSharesBalance = new UserSharesBalance();
+      value = new BigNumber(value);
+      userSharesBalance.userId = key;
+      userSharesBalance.balance = value.toString();
+      userSharesBalance.proportion = new BigNumber(value.dividedBy(totalShares).times(100)).toNumber();
+      userSharesBalance.updatedAt = new Date();
+      updateUserShareRows.push(userSharesBalance);
+      userIds.push(key);
+    }
+    return { userIds, updateUserShareRows };
   }
 
   public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
@@ -406,8 +442,8 @@ export class InvestmentService {
         .execute();
 
       await queryRunner.commitTransaction();
-    } catch (e) {
-      errorMessage = e.message;
+    } catch (error) {
+      errorMessage = error.message;
       await queryRunner.rollbackTransaction();
     } finally {
       await queryRunner.release();
