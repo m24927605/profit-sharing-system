@@ -3,8 +3,9 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   getConnection,
-  getRepository, QueryRunner,
-  Raw
+  getRepository,
+  QueryRunner,
+  Raw,
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
@@ -26,7 +27,9 @@ import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
 import { genSeasonDate } from '../util/season';
+import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
+import { BaseService } from './base';
 
 dayjs.extend(quarterOfYear);
 
@@ -36,46 +39,51 @@ export class InvestmentService {
   private readonly _companyProfitBalanceId = 1;
 
   public async addProfit(sharedProfit: SharedProfit): Promise<void> {
-    // get a connection and create a new query runner
+    const { income, outcome } = sharedProfit;
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
+    const companyProfitFlowRepository = queryRunner.manager.getRepository(CompanySharedProfitFlow);
+    const companyProfitBalanceRepository = queryRunner.manager.getRepository(CompanySharedProfitBalance);
+    let errorMessage = '';
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     try {
-      const shareProfitRepository = queryRunner.manager.getRepository(CompanySharedProfitFlow);
-      await shareProfitRepository.save(sharedProfit);
-      const shareProfitBalanceRepository = queryRunner.manager.getRepository(CompanySharedProfitBalance);
-      const profitBalance = await shareProfitBalanceRepository.findOne(this._companyProfitBalanceId);
-      const companySharedProfitBalance = new CompanySharedProfitBalance();
-      companySharedProfitBalance.id = this._companyProfitBalanceId;
-      const netAddProfit = new BigNumber(sharedProfit.income).minus(sharedProfit.outcome);
-      if (!profitBalance) {
-        companySharedProfitBalance.balance = new BigNumber(netAddProfit).toNumber();
-      } else {
-        companySharedProfitBalance.balance = new BigNumber(profitBalance.balance).plus(netAddProfit).toNumber();
-      }
-      await shareProfitBalanceRepository.save(companySharedProfitBalance);
-      // commit transaction now
+      // Add a record to company_profit_flow table.
+      await BaseService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
+      // Calculate the net addProfit from API request.
+      const netAddProfit = MathService.minus(income, outcome).toNumber();
+      const profitBalance = await companyProfitBalanceRepository.findOne(this._companyProfitBalanceId);
+      // prepare the payload before insert or update action.
+      const companySharedProfitBalance = await this._preInsertOrUpdateCompanyProfitBalance(netAddProfit, profitBalance);
+      // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
+      await BaseService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
       await queryRunner.commitTransaction();
     } catch (e) {
-      // since we have errors let's rollback changes we made
+      errorMessage = e.message;
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created:
       await queryRunner.release();
     }
+    if (errorMessage) throw new Error(errorMessage);
+  }
+
+  private async _preInsertOrUpdateCompanyProfitBalance(netProfit: number, profitBalance: CompanySharedProfitBalance) {
+    const companySharedProfitBalance = new CompanySharedProfitBalance();
+    companySharedProfitBalance.id = this._companyProfitBalanceId;
+    if (!profitBalance) {
+      companySharedProfitBalance.balance = netProfit;
+    } else {
+      const { balance } = profitBalance;
+      companySharedProfitBalance.balance = MathService.plus(balance, netProfit).toNumber();
+    }
+    return companySharedProfitBalance;
   }
 
   public async invest(investDto: InvestDto): Promise<void> {
     let errorMessage = '';
-    // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     try {
       const userShares = new UserShares();
@@ -85,28 +93,21 @@ export class InvestmentService {
       userShares.disinvest = new BigNumber(0).toString();
       const UserSharesFlowRepository = getRepository(UserSharesFlow);
       await UserSharesFlowRepository.save(userShares);
-      // commit transaction now
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created:
       await queryRunner.release();
-      if (errorMessage) throw new Error(errorMessage);
     }
-
+    if (errorMessage) throw new Error(errorMessage);
   }
 
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
     let errorMessage = '';
-    // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
 
     try {
@@ -118,17 +119,14 @@ export class InvestmentService {
       const UserSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
       await UserSharesFlowRepository.save(userShares);
       await this._checkUserCashFlowPositive(disInvestDto.userId, queryRunner);
-      // commit transaction now
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created:
       await queryRunner.release();
-      if (errorMessage) throw new Error(errorMessage);
     }
+    if (errorMessage) throw new Error(errorMessage);
   }
 
   protected async _checkUserCashFlowPositive(userId: string, queryRunner: QueryRunner): Promise<void> {
@@ -169,12 +167,9 @@ export class InvestmentService {
 
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
     let errorMessage = '';
-    // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     try {
       const withDraw = new WithDraw();
@@ -197,18 +192,15 @@ export class InvestmentService {
           userId: withdrawDto.userId
         })
         .execute();
-      // commit transaction now
       await queryRunner.commitTransaction();
 
     } catch (e) {
       errorMessage = e.message;
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created:
       await queryRunner.release();
-      if (errorMessage) throw new Error(errorMessage);
     }
+    if (errorMessage) throw new Error(errorMessage);
   }
 
   // Calculate by season
@@ -239,12 +231,9 @@ export class InvestmentService {
 
   // Calculate by season
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
-    // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     try {
       const userSharesMap = new Map<bigint, BigNumber>();
@@ -275,19 +264,16 @@ export class InvestmentService {
       }
       await queryRunner.manager.getRepository(UserSharesBalance).delete(userIds);
       await queryRunner.manager.getRepository(UserSharesBalance).save(updateArray);
-      // commit transaction now
       await queryRunner.commitTransaction();
     } catch (err) {
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created
       await queryRunner.release();
     }
   }
 
   public async calculateUserGainProfit(): Promise<Map<string, BigNumber>> {
-    const currentSeason = this._getCurrentSeason();
+    const currentSeason = InvestmentService._getCurrentSeason();
     const claimBookingRecords = await getRepository(ClaimBooking).find({ status: ClaimState.INIT });
     const shareProfitCandidatesIds = [];
     const shareProfitCandidates = new Map();
@@ -321,15 +307,12 @@ export class InvestmentService {
       throw new Error('No need to share profit.');
     }
     let errorMessage = '';
-    // get a connection and create a new query runner
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     try {
-      const totalNeedShareProfit = await this._updateUserCashFlowAndBalance(shareProfitCandidates);
+      const totalNeedShareProfit = await InvestmentService._updateUserCashFlowAndBalance(shareProfitCandidates);
       // check if company needs to share profit
       if (totalNeedShareProfit.toNumber() <= 0) {
         throw new Error('No need to share profit.');
@@ -349,30 +332,23 @@ export class InvestmentService {
         })
         .execute();
 
-      // commit transaction now
       await queryRunner.commitTransaction();
     } catch (e) {
       errorMessage = e.message;
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created
       await queryRunner.release();
-      if (errorMessage) throw new Error(errorMessage);
     }
+    if (errorMessage) throw new Error(errorMessage);
   }
 
-  private async _updateUserCashFlowAndBalance(shareProfitCandidates: Map<string, BigNumber>): Promise<BigNumber> {
-    // get a connection and create a new query runner
+  private static async _updateUserCashFlowAndBalance(shareProfitCandidates: Map<string, BigNumber>): Promise<BigNumber> {
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
-    // establish real database connection using our new query runner
     await queryRunner.connect();
-    // lets now open a new transaction:
     await queryRunner.startTransaction();
     let totalNeedShareProfit = new BigNumber(0);
     try {
-      // execute some operations on this transaction:
       for (const [key, value] of Object.entries(shareProfitCandidates)) {
         totalNeedShareProfit = totalNeedShareProfit.plus(value);
         const userCashFlow = new UserCashFlow();
@@ -406,19 +382,16 @@ export class InvestmentService {
           })
           .execute();
       }
-      // commit transaction now:
       await queryRunner.commitTransaction();
     } catch (e) {
-      // since we have errors let's rollback changes we made
       await queryRunner.rollbackTransaction();
     } finally {
-      // you need to release query runner which is manually created:
       await queryRunner.release();
     }
     return totalNeedShareProfit;
   }
 
-  private _getCurrentSeason(): number {
+  private static _getCurrentSeason(): number {
     return dayjs().quarter();
   }
 }
