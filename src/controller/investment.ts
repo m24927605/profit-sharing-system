@@ -18,10 +18,10 @@ import {
   SharedProfit,
   SharedProfitDto
 } from '../dto/shared-profit';
-import { genSeasonDate } from '../util/season';
 import { UtilController } from '../util/controller';
 import { InvestmentService } from '../service/investment';
 import { ResponseType } from './base/response';
+import { TimeService } from '../service/base';
 
 
 @Controller('/investment')
@@ -91,7 +91,7 @@ export class InvestmentController {
   @Post('/user-settle')
   public async recordUserSharesBalance(@Body() { season }: any, @Res() res: Response): Promise<void> {
     try {
-      const seasonMap = genSeasonDate(new Date());
+      const seasonMap = TimeService.getSeasonDateRange(new Date());
       const { fromAt, toAt } = seasonMap.get(season);
       await this._investmentService.settleUserShares(fromAt, toAt);
       const passResponse = UtilController.passHandler('user settle successfully.');
