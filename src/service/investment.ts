@@ -38,7 +38,7 @@ export class InvestmentService {
   private readonly _maxClaimableSeason = Number(process.env.MAX_CLAIM_SEASON);
   private readonly _companyProfitBalanceId = 1;
 
-  public async addProfit(sharedProfit: SharedProfit): Promise<void> {
+  public async addOrUpdateProfit(sharedProfit: SharedProfit): Promise<void> {
     const { income, outcome } = sharedProfit;
     const connection = getConnection();
     const queryRunner = connection.createQueryRunner();
@@ -80,27 +80,19 @@ export class InvestmentService {
   }
 
   public async invest(investDto: InvestDto): Promise<void> {
-    let errorMessage = '';
-    const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    try {
-      const userShares = new UserShares();
-      userShares.id = UtilService.genUniqueId();
-      userShares.userId = investDto.userId;
-      userShares.invest = new BigNumber(investDto.amount).toString();
-      userShares.disinvest = new BigNumber(0).toString();
-      const UserSharesFlowRepository = getRepository(UserSharesFlow);
-      await UserSharesFlowRepository.save(userShares);
-      await queryRunner.commitTransaction();
-    } catch (e) {
-      errorMessage = e.message;
-      await queryRunner.rollbackTransaction();
-    } finally {
-      await queryRunner.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+    const userSharesFlowRepository = getRepository(UserSharesFlow);
+    // Prepare the payload before add record to user_shares_flow table.
+    const userShares = this._preInvest(investDto);
+    await BaseService.insertOrUpdate(userSharesFlowRepository, userShares);
+  }
+
+  private _preInvest(investDto: InvestDto): UserShares {
+    const userShares = new UserShares();
+    userShares.id = UtilService.genUniqueId();
+    userShares.userId = investDto.userId;
+    userShares.invest = new BigNumber(investDto.amount).toString();
+    userShares.disinvest = new BigNumber(0).toString();
+    return userShares;
   }
 
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
