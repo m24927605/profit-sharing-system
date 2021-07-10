@@ -54,7 +54,7 @@ export class InvestmentService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      await RepositoryService.insertOrUpdate(companyProfitFlowRepository, sharedProfit);
+      await companyProfitFlowRepository.insert(sharedProfit);
       // Calculate the net addProfit from API request.It's convenience for adding or withdrawing using.
       const netAddProfit = MathService.minus(income, outcome).toNumber();
       const profitBalance = await companyProfitBalanceRepository.findOne(this._companyId);
@@ -97,7 +97,7 @@ export class InvestmentService {
     const userSharesFlowRepository = getRepository(UserSharesFlow);
     // Prepare the payload before add record to user_shares_flow table.
     const userShares = InvestmentService._preInvest(investDto);
-    await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
+    await userSharesFlowRepository.insert(userShares);
   }
 
   /**
@@ -128,7 +128,7 @@ export class InvestmentService {
     try {
       const userShares = await InvestmentService._preUpdateUserCashFlow(disInvestDto);
       const userSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
-      await RepositoryService.insertOrUpdate(userSharesFlowRepository, userShares);
+      await userSharesFlowRepository.insert(userShares);
       // check the user net shares,must be positive value
       await InvestmentService._checkNetSharePositive(disInvestDto.userId, userSharesFlowRepository);
       await queryRunner.commitTransaction();
@@ -235,9 +235,9 @@ export class InvestmentService {
       newUserCashBalance.balance = MathService.plus(balanceAmount, depositAmount).minus(withdrawAmount).toNumber();
       // update user_cash_balance table
       await InvestmentService._updateUserCashBalance(newUserCashBalance, withdrawData, queryRunner);
-      const UserCashFlowRepository = queryRunner.manager.getRepository(UserCashFlow);
+      const userCashFlowRepository = queryRunner.manager.getRepository(UserCashFlow);
       // insert user_cash_flow table
-      await RepositoryService.insertOrUpdate(UserCashFlowRepository, withdrawData);
+      await userCashFlowRepository.insert(withdrawData);
       await queryRunner.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
@@ -543,8 +543,8 @@ export class InvestmentService {
     userCashFlow.userId = userId;
     userCashFlow.deposit = new BigNumber(payableAmount).toNumber();
     userCashFlow.withdraw = 0;
-    const userCashFlowRepository = await sql.manager.getRepository(UserCashFlow);
-    await RepositoryService.insertOrUpdate(userCashFlowRepository, userCashFlow);
+    const userCashFlowRepository = sql.manager.getRepository(UserCashFlow);
+    await userCashFlowRepository.insert(userCashFlow);
   }
 
   /**
@@ -568,7 +568,7 @@ export class InvestmentService {
       // prepare payload before updating user_cash_balance table
       const updateCashBalance = await InvestmentService._preUpdateUserCashBalance(userId, updateBalance, sql);
       // update user_cash_balance table
-      await RepositoryService.insertOrUpdate(userCashBalanceRepository, updateCashBalance);
+      await userCashBalanceRepository.update(userId, updateCashBalance);
       const claimBooking = await claimBookingRepository.findOne({
         userId,
         status: ClaimState.INIT
