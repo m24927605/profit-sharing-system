@@ -152,7 +152,8 @@ export class InvestmentService {
   /**
    * Prepare payload before update user_cash_flow table.
    * @param userId It's the id of the user.
-   * @param amount It's amount for invest or disinvest.
+   * @param investAmount It's amount for invest.
+   * @param disInvestAmount It's amount for disinvest.
    * @return UserShares It's UserShares entity.
    */
   private static async _preAddRecordUserSharesFlow(userId: string, investAmount?: string, disInvestAmount?: string)
