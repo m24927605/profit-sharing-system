@@ -29,7 +29,10 @@ import { UserSharesFlow } from '../entity/user-shares-flow';
 import { ClaimState } from '../util/state';
 import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
-import { RepositoryService, TimeService } from './base';
+import {
+  RepositoryService,
+  TimeService
+} from './base';
 
 dayjs.extend(quarterOfYear);
 
@@ -47,12 +50,12 @@ export class InvestmentService {
   public async addOrUpdateProfit(sharedProfit: SharedProfit): Promise<void> {
     const { income, outcome } = sharedProfit;
     const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
-    const companyProfitFlowRepository = queryRunner.manager.getRepository(CompanySharedProfitFlow);
-    const companyProfitBalanceRepository = queryRunner.manager.getRepository(CompanySharedProfitBalance);
+    const sql = connection.createQueryRunner();
+    const companyProfitFlowRepository = sql.manager.getRepository(CompanySharedProfitFlow);
+    const companyProfitBalanceRepository = sql.manager.getRepository(CompanySharedProfitBalance);
     let errorMessage = '';
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await sql.connect();
+    await sql.startTransaction();
     try {
       await companyProfitFlowRepository.insert(sharedProfit);
       // Calculate the net addProfit from API request.It's convenience for adding or withdrawing using.
@@ -61,12 +64,12 @@ export class InvestmentService {
       const companySharedProfitBalance = await this._preInsertOrUpdateCompanyProfitBalance(netAddProfit, profitBalance);
       // If the record is not exists in the company_shared_profit table,then add a record or update the balance amount.
       await RepositoryService.insertOrUpdate(companyProfitBalanceRepository, companySharedProfitBalance);
-      await queryRunner.commitTransaction();
+      await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
-      await queryRunner.rollbackTransaction();
+      await sql.rollbackTransaction();
     } finally {
-      await queryRunner.release();
+      await sql.release();
     }
     if (errorMessage) throw new Error(errorMessage);
   }
@@ -121,22 +124,22 @@ export class InvestmentService {
    */
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
     const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
+    const sql = connection.createQueryRunner();
     let errorMessage = '';
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await sql.connect();
+    await sql.startTransaction();
     try {
-      const userShares = await InvestmentService._preUpdateUserCashFlow(disInvestDto);
-      const userSharesFlowRepository = queryRunner.manager.getRepository(UserSharesFlow);
+      const userShares = await InvestmentService._preInsertUserSharesFlow(disInvestDto);
+      const userSharesFlowRepository = sql.manager.getRepository(UserSharesFlow);
       await userSharesFlowRepository.insert(userShares);
       // check the user net shares,must be positive value
       await InvestmentService._checkNetSharePositive(disInvestDto.userId, userSharesFlowRepository);
-      await queryRunner.commitTransaction();
+      await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
-      await queryRunner.rollbackTransaction();
+      await sql.rollbackTransaction();
     } finally {
-      await queryRunner.release();
+      await sql.release();
     }
     if (errorMessage) throw new Error(errorMessage);
   }
@@ -146,7 +149,7 @@ export class InvestmentService {
    * @param disInvestDto It's a DTO object from API request.
    * @return UserShares It's UserShares entity.
    */
-  private static async _preUpdateUserCashFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
+  private static async _preInsertUserSharesFlow(disInvestDto: DisInvestDto): Promise<UserShares> {
     const userShares = new UserShares();
     userShares.id = UtilService.genUniqueId();
     userShares.userId = disInvestDto.userId;
@@ -216,16 +219,16 @@ export class InvestmentService {
    */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
     const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
+    const sql = connection.createQueryRunner();
     let errorMessage = '';
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await sql.connect();
+    await sql.startTransaction();
     try {
-      const UserCashBalanceRepository = queryRunner.manager.getRepository(UserCashBalance);
+      const UserCashBalanceRepository = sql.manager.getRepository(UserCashBalance);
       const userCashBalance = await UserCashBalanceRepository.findOne(withdrawDto.userId);
       // check the data from user_cash_balance table
       InvestmentService._checkUserCashBalance(userCashBalance);
-      const withdrawData = InvestmentService._preInsertOrUpdateUserCashFlow(withdrawDto);
+      const withdrawData = InvestmentService._preInsertUserCashFlow(withdrawDto);
       const { balance: balanceAmount } = userCashBalance;
       const withdrawAmount = withdrawData.withdraw;
       const depositAmount = withdrawData.deposit;
@@ -234,16 +237,16 @@ export class InvestmentService {
       const newUserCashBalance = userCashBalance;
       newUserCashBalance.balance = MathService.plus(balanceAmount, depositAmount).minus(withdrawAmount).toNumber();
       // update user_cash_balance table
-      await InvestmentService._updateUserCashBalance(newUserCashBalance, withdrawData, queryRunner);
-      const userCashFlowRepository = queryRunner.manager.getRepository(UserCashFlow);
+      await InvestmentService._updateUserCashBalance(newUserCashBalance, withdrawData, sql);
+      const userCashFlowRepository = sql.manager.getRepository(UserCashFlow);
       // insert user_cash_flow table
       await userCashFlowRepository.insert(withdrawData);
-      await queryRunner.commitTransaction();
+      await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
-      await queryRunner.rollbackTransaction();
+      await sql.rollbackTransaction();
     } finally {
-      await queryRunner.release();
+      await sql.release();
     }
     if (errorMessage) throw new Error(errorMessage);
   }
@@ -276,7 +279,7 @@ export class InvestmentService {
    * @param withdrawDto It's a DTO object from API request.
    * @return WithDraw It's WithDraw entity.
    */
-  private static _preInsertOrUpdateUserCashFlow(withdrawDto: WithdrawDto): WithDraw {
+  private static _preInsertUserCashFlow(withdrawDto: WithdrawDto): WithDraw {
     const withDraw = new WithDraw();
     withDraw.id = UtilService.genUniqueId();
     withDraw.userId = withdrawDto.userId;
@@ -313,31 +316,31 @@ export class InvestmentService {
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
     let errorMessage = '';
     const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const sql = connection.createQueryRunner();
+    await sql.connect();
+    await sql.startTransaction();
     try {
       const fromAtUnix = dayjs(fromAt).unix();
       const toAtUnix = dayjs(toAt).unix();
-      const userSharesFlowRecords = await queryRunner.manager.getRepository(UserSharesFlow).find({
+      const userSharesFlowRecords = await sql.manager.getRepository(UserSharesFlow).find({
         createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${fromAtUnix} AND unix_timestamp(${alias}) < ${toAtUnix}`)
       });
       // Calculate user shares
       const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
       // Prepare payload before insert or update user_shares_balance table
-      const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShare(totalShares, userSharesMap);
+      const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
       await InvestmentService._checkUserShares(userIds, updateUserShareRows);
-      const userShareBalanceRepository = queryRunner.manager.getRepository(UserSharesBalance);
+      const userShareBalanceRepository = sql.manager.getRepository(UserSharesBalance);
       // Delete old data
       await userShareBalanceRepository.delete(userIds);
       // Insert or update user_shares_balance table
       await RepositoryService.insertOrUpdate(userShareBalanceRepository, updateUserShareRows);
-      await queryRunner.commitTransaction();
+      await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
-      await queryRunner.rollbackTransaction();
+      await sql.rollbackTransaction();
     } finally {
-      await queryRunner.release();
+      await sql.release();
     }
     if (errorMessage) throw new Error(errorMessage);
   }
@@ -373,7 +376,7 @@ export class InvestmentService {
    * @param userSharesMap It's a map that store every user's shares.
    * @return - { userIds, updateUserShareRows }
    */
-  private static preUpdateUserShare(totalShares: number, userSharesMap: Map<string, BigNumber>)
+  private static preUpdateUserShares(totalShares: number, userSharesMap: Map<string, BigNumber>)
     : { userIds: string[], updateUserShareRows: UserSharesBalance[] } {
     const updateUserShareRows = [];
     const userIds = [];
@@ -450,36 +453,29 @@ export class InvestmentService {
    * @param payableCandidates It's a list that company needs to pay.
    * @return - void
    */
-  public async doShareProfit(payableCandidates: Map<string, BigNumber>): Promise<void> {
+  public async shareProfit(payableCandidates: Map<string, BigNumber>): Promise<void> {
     await InvestmentService._checkCandidates(payableCandidates);
     const connection = getConnection();
-    const queryRunner = connection.createQueryRunner();
+    const sql = connection.createQueryRunner();
     let errorMessage = '';
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await sql.connect();
+    await sql.startTransaction();
     try {
       const totalPayableProfit = InvestmentService._calculateTotalPayableAmount(payableCandidates);
       await InvestmentService._checkIfCompanyNeedPay(totalPayableProfit);
-      await InvestmentService._updatePayableUserCashFlow(payableCandidates, queryRunner);
-      await InvestmentService._updatePayableUserCashBalance(payableCandidates, queryRunner);
+      await InvestmentService._updatePayableUserCashFlow(payableCandidates, sql);
+      await InvestmentService._updatePayableUserCashBalance(payableCandidates, sql);
       const companySharedProfitFlow = InvestmentService._preInsertCompanySharedProfitFlow(totalPayableProfit);
-      await queryRunner.manager.getRepository(CompanySharedProfitFlow).insert(companySharedProfitFlow);
+      await sql.manager.getRepository(CompanySharedProfitFlow).insert(companySharedProfitFlow);
       const { outcome } = companySharedProfitFlow;
-      const updateProfitBalance = await InvestmentService._preUpdateCompProfitBalance(this._companyId, outcome, queryRunner);
-      await queryRunner.manager.createQueryBuilder().update(CompanySharedProfitBalance)
-        .set(updateProfitBalance)
-        // To avoid phantom READ,balance - outcome >= 0
-        .where('balance - :outcome >= 0 AND id = :id', {
-          outcome,
-          id: this._companyId
-        })
-        .execute();
-      await queryRunner.commitTransaction();
+      const updateProfitBalance = await InvestmentService._preUpdateCompProfitBalance(this._companyId, outcome, sql);
+      await this._updateCompProfitBalance(updateProfitBalance, outcome, sql);
+      await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
-      await queryRunner.rollbackTransaction();
+      await sql.rollbackTransaction();
     } finally {
-      await queryRunner.release();
+      await sql.release();
     }
     if (errorMessage) throw new Error(errorMessage);
   }
@@ -655,5 +651,23 @@ export class InvestmentService {
     companyProfitBalance.id = companyId;
     companyProfitBalance.balance = updateBalance;
     return companyProfitBalance;
+  }
+
+  /**
+   * Update company profit balance.
+   * @param profitBalance It's a payload that for updating company_shared_profit_balance table
+   * @param outcome It's amount that company needs to pay.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
+  private async _updateCompProfitBalance(profitBalance: CompanySharedProfitBalance, outcome: number, sql: QueryRunner) {
+    await sql.manager.createQueryBuilder().update(CompanySharedProfitBalance)
+      .set(profitBalance)
+      // To avoid phantom READ,balance - outcome >= 0
+      .where('balance - :outcome >= 0 AND id = :id', {
+        outcome,
+        id: this._companyId
+      })
+      .execute();
   }
 }

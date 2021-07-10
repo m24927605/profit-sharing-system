@@ -20,11 +20,6 @@ export class CronTaskService {
   constructor(private readonly _investmentService: InvestmentService) {
   }
 
-  @Interval(1000)
-  handleCron() {
-    this.logger.debug('health check every second.');
-  }
-
   // daily check if needs to settle or calculate user profit
   @Cron('* * 24 * * *')
   public async scheduledJob(): Promise<void> {
@@ -45,7 +40,7 @@ export class CronTaskService {
       // delay 1 day to pay to the user and the paid time will be in the next season
       const oneDayMs = 1000 * 60 * 60 * 24;
       await this._sleep(oneDayMs);
-      await this._investmentService.doShareProfit(candidates);
+      await this._investmentService.shareProfit(candidates);
       candidates = null;
     }
   }

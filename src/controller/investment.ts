@@ -107,7 +107,7 @@ export class InvestmentController {
     try {
       const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
       const candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
-      await this._investmentService.doShareProfit(candidates);
+      await this._investmentService.shareProfit(candidates);
       const passResponse = UtilController.passHandler('share profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {

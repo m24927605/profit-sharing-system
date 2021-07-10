@@ -48,7 +48,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         UserSharesBalance,
         UserSharesFlow,
       ],
-      synchronize: true,
+      //synchronize: true,
       logging: true
     }),
     InvestmentModule,
