@@ -37,11 +37,12 @@ dayjs.extend(quarterOfYear);
 export class InvestmentService {
   private readonly _maxClaimableSeason = Number(process.env.MAX_CLAIM_SEASON);
   private readonly _companyId = 1;
+  private static readonly _noNeedShareMessage = 'No need to share profit.';
 
   /**
    * For adding or updating the company profit.
    * @param sharedProfit - It's the money that the company want to store in or take it out.
-   * @return void
+   * @return - void
    */
   public async addOrUpdateProfit(sharedProfit: SharedProfit): Promise<void> {
     const { income, outcome } = sharedProfit;
@@ -90,7 +91,7 @@ export class InvestmentService {
   /**
    * For user invest.
    * @param investDto It's a DTO object from API request.
-   * @return void
+   * @return - void
    */
   public async invest(investDto: InvestDto): Promise<void> {
     const userSharesFlowRepository = getRepository(UserSharesFlow);
@@ -116,7 +117,7 @@ export class InvestmentService {
   /**
    * For user disinvest.
    * @param disInvestDto It's a DTO object from API request.
-   * @return void
+   * @return - void
    */
   public async disinvest(disInvestDto: DisInvestDto): Promise<void> {
     const connection = getConnection();
@@ -158,7 +159,7 @@ export class InvestmentService {
    * Need to make sure the net shares of the user is more than 0.
    * @param userId It's the id of the user
    * @param userSharesRepo The repository is mapping to user_share_flow table
-   * @return void
+   * @return - void
    */
   private static async _checkNetSharePositive(userId: string, userSharesRepo: Repository<UserShares>): Promise<void> {
     const userSharesFlowRecords = await userSharesRepo.find({ where: { userId } });
@@ -174,7 +175,7 @@ export class InvestmentService {
   /**
    * For user claim the share profit right.
    * @param userId It's the id of the user.
-   * @return void
+   * @return - void
    */
   public async claim({ userId }: ClaimDto): Promise<void> {
     const claimBookingRepository = getRepository(ClaimBooking);
@@ -194,7 +195,7 @@ export class InvestmentService {
   /**
    * Check the record is not duplicated.
    * @param claimBookingRecords It's ClaimBooking entity array data.
-   * @return void
+   * @return - void
    */
   private static _checkClaimRecordNotDuplicated(claimBookingRecords: ClaimBooking[]): void {
     const nowDate = new Date();
@@ -211,7 +212,7 @@ export class InvestmentService {
   /**
    * For user withdraw the money from the company share the profit.
    * @param withdrawDto It's a DTO object from API request.
-   * @return void
+   * @return - void
    */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
     const connection = getConnection();
@@ -250,7 +251,7 @@ export class InvestmentService {
   /**
    * Check the balance in user_cash_balance table.
    * @param userCashBalance It's UserCashBalance entity.
-   * @return void
+   * @return - void
    */
   private static _checkUserCashBalance(userCashBalance: UserCashBalance): void {
     if (!userCashBalance) {
@@ -262,7 +263,7 @@ export class InvestmentService {
    * Check the withdraw amount is less than balance amount or not.
    * @param withdraw It's withdraw amount.
    * @param balance It's balance amount.
-   * @return void
+   * @return - void
    */
   private static _checkWithdrawAmountLessThanBalance(withdraw: number, balance: number): void {
     if (new BigNumber(withdraw).isGreaterThan(new BigNumber(balance))) {
@@ -289,7 +290,7 @@ export class InvestmentService {
    * @param userCashBalance It's UserCashBalance entity.
    * @param withDraw It's WithDraw entity.
    * @param sql It's TypeORM queryRunner.
-   * @return void
+   * @return - void
    */
   private static async _updateUserCashBalance(userCashBalance: UserCashBalance, withDraw: WithDraw, sql: QueryRunner)
     : Promise<void> {
@@ -306,7 +307,7 @@ export class InvestmentService {
    * Settle user's investment shares.
    * @param fromAt It's started date about settle.
    * @param toAt It's ended date about settle.
-   * @return void
+   * @return - void
    */
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
     let errorMessage = '';
@@ -324,6 +325,7 @@ export class InvestmentService {
       const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
       // Prepare payload before insert or update user_shares_balance table
       const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShare(totalShares, userSharesMap);
+      await InvestmentService._checkUserShares(userIds, updateUserShareRows);
       const userShareBalanceRepository = queryRunner.manager.getRepository(UserSharesBalance);
       // Delete old data
       await userShareBalanceRepository.delete(userIds);
@@ -358,6 +360,12 @@ export class InvestmentService {
     return { totalShares, userSharesMap };
   }
 
+  private static _checkUserShares(userIds: string[], updateUserShareRows: UserSharesBalance[]) {
+    if (userIds.length === 0 || updateUserShareRows.length === 0) {
+      throw new Error(this._noNeedShareMessage);
+    }
+  }
+
   /**
    * Prepare payload for update user_shares_balance table
    * @param totalShares It's a total number about the whole shares.
@@ -368,7 +376,8 @@ export class InvestmentService {
     : { userIds: string[], updateUserShareRows: UserSharesBalance[] } {
     const updateUserShareRows = [];
     const userIds = [];
-    for (const [userId, balance] of userSharesMap.entries()) {
+    // DO NOT use Map.entries() that will return empty array
+    for (const [userId, balance] of Object.entries(userSharesMap)) {
       const userSharesBalance = new UserSharesBalance();
       userSharesBalance.userId = userId;
       userSharesBalance.balance = balance.toString();
@@ -406,7 +415,7 @@ export class InvestmentService {
   /**
    * Is claim date in the max claimable season?
    * @param createdAt
-   * @private
+   * @return - boolean
    */
   private _isClaimDateAvailable(createdAt: Date): boolean {
     const currentSeason = TimeService.getSeason();
@@ -435,6 +444,11 @@ export class InvestmentService {
     return payableCandidates;
   }
 
+  /**
+   * Company do share profit to investor.
+   * @param payableCandidates It's a list that company needs to pay.
+   * @return - void
+   */
   public async doShareProfit(payableCandidates: Map<string, BigNumber>): Promise<void> {
     await InvestmentService._checkCandidates(payableCandidates);
     const connection = getConnection();
@@ -468,43 +482,77 @@ export class InvestmentService {
     if (errorMessage) throw new Error(errorMessage);
   }
 
-  private static _checkCandidates(payableCandidates: Map<string, BigNumber>) {
+  /**
+   * Company do share profit to investor.
+   * @param payableCandidates It's a list that company needs to pay.
+   * @return - void
+   */
+  private static _checkCandidates(payableCandidates: Map<string, BigNumber>): void {
     if (payableCandidates.size === 0) {
-      throw new Error('No need to share profit.');
+      throw new Error(this._noNeedShareMessage);
     }
   }
 
-  private static _calculateTotalPayableAmount(shareProfitCandidates: Map<string, BigNumber>) {
+  /**
+   * Calculate total payable amount.
+   * @param payableCandidates It's a list that company needs to pay.
+   * @return totalNeedShareProfit It's a sum value about the company total need to pay.
+   */
+  private static _calculateTotalPayableAmount(payableCandidates: Map<string, BigNumber>): BigNumber {
     let totalNeedShareProfit = new BigNumber(0);
-    for (const value of shareProfitCandidates.values()) {
+    for (const value of payableCandidates.values()) {
       totalNeedShareProfit = MathService.plus(totalNeedShareProfit.toNumber(), value.toNumber());
     }
     return totalNeedShareProfit;
   }
 
+  /**
+   * Check if the company need to pay.
+   * @param totalPayableProfit It's a sum value about the company total need to pay.
+   * @return - void
+   */
   private static _checkIfCompanyNeedPay(totalPayableProfit: BigNumber) {
     // check if company needs to share profit
     if (totalPayableProfit.toNumber() <= 0) {
-      throw new Error('No need to share profit.');
+      throw new Error(this._noNeedShareMessage);
     }
   }
 
-  private static async _updatePayableUserCashFlow(profitCandidates: Map<string, BigNumber>, queryRunner: QueryRunner) {
+  /**
+   * Update user's cash flow if the user is available to gain the shared profit.
+   * @param profitCandidates It's a list that company needs to pay.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
+  private static async _updatePayableUserCashFlow(profitCandidates: Map<string, BigNumber>, sql: QueryRunner) {
     for (const [userId, payableAmount] of profitCandidates.entries()) {
-      await InvestmentService._allocateFunds(userId, payableAmount.toNumber(), queryRunner);
+      await InvestmentService._allocateFunds(userId, payableAmount.toNumber(), sql);
     }
   }
 
-  private static async _allocateFunds(userId, payableAmount: number, queryRunner: QueryRunner) {
+  /**
+   * Company distribute the shared profit to user.
+   * @param userId It's the id of the user.
+   * @param payableAmount It's the amount company needs to pay.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
+  private static async _allocateFunds(userId, payableAmount: number, sql: QueryRunner): Promise<void> {
     const userCashFlow = new UserCashFlow();
     userCashFlow.id = UtilService.genUniqueId();
     userCashFlow.userId = userId;
     userCashFlow.deposit = new BigNumber(payableAmount).toNumber();
     userCashFlow.withdraw = 0;
-    const userCashFlowRepository = await queryRunner.manager.getRepository(UserCashFlow);
+    const userCashFlowRepository = await sql.manager.getRepository(UserCashFlow);
     await RepositoryService.insertOrUpdate(userCashFlowRepository, userCashFlow);
   }
 
+  /**
+   * Update the record in user_cash_balance if the user could gain the shared profit.
+   * @param profitCandidates It's the amount company needs to pay.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
   private static async _updatePayableUserCashBalance(profitCandidates: Map<string, BigNumber>, sql: QueryRunner)
     : Promise<void> {
     const userCashBalanceRepository = sql.manager.getRepository(UserCashBalance);
@@ -537,28 +585,53 @@ export class InvestmentService {
     }
   }
 
-  private static async _checkUserCashBalanceRecords(userId: string, cashBalance: UserCashBalance, sql: QueryRunner) {
-    if (!cashBalance) {
+  /**
+   * Check user's balance amount in user_cash_balance table.
+   * @param userId It's the id of the user.
+   * @param balance It's balance amount of the user in user_cash_balance table.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
+  private static async _checkUserCashBalanceRecords(userId: string, balance: UserCashBalance, sql: QueryRunner) {
+    if (!balance) {
       await InvestmentService._initializeUserCashBalance(userId, sql);
     }
   }
 
-  private static async _initializeUserCashBalance(userId: string, queryRunner: QueryRunner): Promise<void> {
+  /**
+   * Initialize the record in user_cash_balance table.
+   * @param userId It's the id of the user.
+   * @param sql It's TypeORM QueryRunner.
+   * @return - void
+   */
+  private static async _initializeUserCashBalance(userId: string, sql: QueryRunner): Promise<void> {
     const userCashBalance = new UserCashBalance();
     userCashBalance.userId = userId;
     userCashBalance.balance = 0;
-    const userCashBalanceRepository = await queryRunner.manager.getRepository(UserCashBalance);
+    const userCashBalanceRepository = await sql.manager.getRepository(UserCashBalance);
     await RepositoryService.insertOrUpdate(userCashBalanceRepository, userCashBalance);
   }
 
-  private static async _preUpdateUserCashBalance(userId: string, balance: number, queryRunner: QueryRunner)
+  /**
+   * Prepare the payload before updating the user_cash_balance table.
+   * @param userId It's the id of the user.
+   * @param balance It's balance amount of the user in user_cash_balance table.
+   * @param sql It's TypeORM QueryRunner.
+   * @return UserCashBalance
+   */
+  private static async _preUpdateUserCashBalance(userId: string, balance: number, sql: QueryRunner)
     : Promise<UserCashBalance> {
-    const updateCashBalance = await queryRunner.manager.getRepository(UserCashBalance).findOne(userId);
+    const updateCashBalance = await sql.manager.getRepository(UserCashBalance).findOne(userId);
     updateCashBalance.userId = userId;
     updateCashBalance.balance = balance;
     return updateCashBalance;
   }
 
+  /**
+   * Prepare the payload before insert a record in the company_shared_profit_flow table.
+   * @param totalPayableProfit It's amount of the company needs to pay.
+   * @return CompanySharedProfitFlow
+   */
   private static _preInsertCompanySharedProfitFlow(totalPayableProfit: BigNumber): CompanySharedProfitFlow {
     const companySharedProfitFlow = new CompanySharedProfitFlow();
     companySharedProfitFlow.income = 0;
@@ -566,9 +639,16 @@ export class InvestmentService {
     return companySharedProfitFlow;
   }
 
-  private static async _preUpdateCompProfitBalance(companyId: number, outcome: number, queryRunner: QueryRunner)
+  /**
+   * Prepare the payload before updating a record in the company_shared_profit_flow table.
+   * @param companyId It's the id of the company.
+   * @param outcome It's amount that company needs to pay.
+   * @param sql It's TypeORM QueryRunner.
+   * @return CompanySharedProfitBalance
+   */
+  private static async _preUpdateCompProfitBalance(companyId: number, outcome: number, sql: QueryRunner)
     : Promise<CompanySharedProfitBalance> {
-    const companyProfitBalance = await queryRunner.manager.getRepository(CompanySharedProfitBalance).findOne(companyId);
+    const companyProfitBalance = await sql.manager.getRepository(CompanySharedProfitBalance).findOne(companyId);
     const updateBalance = new BigNumber(companyProfitBalance.balance).minus(outcome).toNumber();
     companyProfitBalance.id = companyId;
     companyProfitBalance.balance = updateBalance;
