@@ -104,8 +104,9 @@ export class InvestmentController {
   @Post('/share-profit')
   public async doShareProfit(@Body() body: any, @Res() res: Response): Promise<void> {
     try {
-      const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
-      const candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
+      const shareProfitCandidateIds = await this._investmentService.getQualifiedClaimers();
+      await this._investmentService.setNotQualifiedClaimersExpired();
+      const candidates = await this._investmentService.getPayableClaimers(shareProfitCandidateIds);
       await this._investmentService.shareProfit(candidates);
       const passResponse = UtilController.passHandler('share profit successfully.');
       res.status(passResponse.status).json(passResponse);

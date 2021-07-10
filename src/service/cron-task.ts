@@ -1,12 +1,10 @@
 import dayjs from 'dayjs';
 
 import {
-  Injectable,
-  Logger
+  Injectable
 } from '@nestjs/common';
 import {
-  Cron,
-  Interval
+  Cron
 } from '@nestjs/schedule';
 
 import { InvestmentService } from './investment';
@@ -15,8 +13,6 @@ import BigNumber from 'bignumber.js';
 
 @Injectable()
 export class CronTaskService {
-  private readonly logger = new Logger(CronTaskService.name);
-
   constructor(private readonly _investmentService: InvestmentService) {
   }
 
@@ -25,23 +21,26 @@ export class CronTaskService {
   public async scheduledJob(): Promise<void> {
     const dateFormat = 'YYYY-MM-DD';
     const currentSeason = dayjs().quarter();
-    let candidates: Map<string, BigNumber>;
+    let claimers: Map<string, BigNumber>;
     const seasonDateRange = TimeService.getSeasonDateRange(new Date());
     const { fromAt, toAt } = seasonDateRange.get(currentSeason);
     // settle user shares and calculate user profit at the end of season
     if (dayjs().format(dateFormat) === dayjs(toAt).format(dateFormat)) {
       await this._investmentService.settleUserShares(fromAt, toAt);
-      // refresh claim_booking table
-      const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
-      // get payable user list
-      candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
+      // get qualified claimer
+      const shareProfitClaimerIds = await this._investmentService.getQualifiedClaimers();
+      // set not qualified claimer expired
+      await this._investmentService.setNotQualifiedClaimersExpired();
+      // get payable claimer list
+      claimers = await this._investmentService.getPayableClaimers(shareProfitClaimerIds);
     }
-    if (candidates) {
+    if (claimers) {
       // delay 1 day to pay to the user and the paid time will be in the next season
       const oneDayMs = 1000 * 60 * 60 * 24;
       await this._sleep(oneDayMs);
-      await this._investmentService.shareProfit(candidates);
-      candidates = null;
+      // share profit to claimers
+      await this._investmentService.shareProfit(claimers);
+      claimers = null;
     }
   }
 
