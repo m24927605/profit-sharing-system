@@ -10,8 +10,7 @@ import {
 
 import {
   ClaimDto,
-  DisInvestDto,
-  InvestDto,
+  InvestOrDisInvestDto,
   WithdrawDto
 } from '../dto/investment';
 import {
@@ -30,7 +29,7 @@ export class InvestmentController {
   }
 
   @Post('/invest')
-  public async invest(@Body() investDto: InvestDto, @Res() res: Response): Promise<void> {
+  public async invest(@Body() investDto: InvestOrDisInvestDto, @Res() res: Response): Promise<void> {
     try {
       await this._investmentService.invest(investDto);
       const passResponse = UtilController.passHandler('invest successfully.');
@@ -41,7 +40,7 @@ export class InvestmentController {
   }
 
   @Post('/disinvest')
-  public async disinvest(@Body() disInvestDto: DisInvestDto, @Res() res: Response): Promise<void> {
+  public async disinvest(@Body() disInvestDto: InvestOrDisInvestDto, @Res() res: Response): Promise<void> {
     try {
       await this._investmentService.disinvest(disInvestDto);
       const passResponse = UtilController.passHandler('disinvest successfully.');
@@ -57,7 +56,7 @@ export class InvestmentController {
       const sharedProfit = new SharedProfit();
       sharedProfit.income = new BigNumber(sharedProfitDto.income).toNumber();
       sharedProfit.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
-      await this._investmentService.addOrUpdateProfit(sharedProfit);
+      await this._investmentService.addProfit(sharedProfit);
       const passResponse = UtilController.passHandler('add shared profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {

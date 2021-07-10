@@ -10,17 +10,7 @@ export class ClaimDto {
   userId: string;
 }
 
-export class InvestDto {
-  @IsString()
-  @IsNotEmpty()
-  userId: string;
-
-  @IsDecimal()
-  @IsNotEmpty()
-  amount: string;
-}
-
-export class DisInvestDto {
+export class InvestOrDisInvestDto {
   @IsString()
   @IsNotEmpty()
   userId: string;
@@ -50,13 +40,6 @@ export class UserShares {
   userId: string;
   invest: string;
   disinvest: string;
-}
-
-export class WithDraw {
-  id: string;
-  userId: string;
-  withdraw: number;
-  deposit: number;
 }
 
 export class UserSharesBalanceData {
