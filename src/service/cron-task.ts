@@ -36,7 +36,9 @@ export class CronTaskService {
     // settle user shares and calculate user profit at the end of season
     if (dayjs().format(dateFormat) === dayjs(toAt).format(dateFormat)) {
       await this._investmentService.settleUserShares(fromAt, toAt);
+      // refresh claim_booking table
       const { shareProfitCandidateIds } = await this._investmentService.refreshClaimBooking();
+      // get payable user list
       candidates = await this._investmentService.getPayableCandidates(shareProfitCandidateIds);
     }
     if (candidates) {
