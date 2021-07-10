@@ -6,7 +6,7 @@
 docker-compose up -d
 ```
 
-2. Checkout postman folder and there is a file(API-collection.json),please import the file to postman app.
+2. Checkout postman folder and there is a file(api-collection.json),please import the file to postman app.
 
 3. You could test API in postman manually.
 
