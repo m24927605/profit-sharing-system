@@ -296,6 +296,7 @@ export class InvestmentService {
     : Promise<void> {
     await sql.manager.createQueryBuilder().update(UserCashBalance)
       .set(userCashBalance)
+      // To avoid phantom READ,balance - withdraw >= 0
       .where('balance - :withdraw >= 0 AND userId = :userId', {
         withdraw: withDraw.withdraw,
         userId: withDraw.userId
@@ -467,6 +468,7 @@ export class InvestmentService {
       const updateProfitBalance = await InvestmentService._preUpdateCompProfitBalance(this._companyId, outcome, queryRunner);
       await queryRunner.manager.createQueryBuilder().update(CompanySharedProfitBalance)
         .set(updateProfitBalance)
+        // To avoid phantom READ,balance - outcome >= 0
         .where('balance - :outcome >= 0 AND id = :id', {
           outcome,
           id: this._companyId
