@@ -66,7 +66,7 @@ export class InvestmentService {
   }
 
   /**
-   * Add a record to company_shared_profit_flow table
+   * Add a record to company_shared_profit_flow table.
    * @param sharedProfit - It's the money that the company want to store in or take it out.
    * @param sql It's TypeORM queryRunner.
    * @return - void
@@ -130,15 +130,16 @@ export class InvestmentService {
    * @return - void
    */
   public async disinvest(disInvestDto: InvestOrDisInvestDto): Promise<void> {
+    const { userId, amount } = disInvestDto;
     const connection = getConnection();
     const sql = connection.createQueryRunner();
     let errorMessage = '';
     await sql.connect();
     await sql.startTransaction();
     try {
-      const userShares = await InvestmentService._preAddRecordUserSharesFlow(disInvestDto.userId, undefined, disInvestDto.amount);
+      const userShares = await InvestmentService._preAddRecordUserSharesFlow(userId, undefined, amount);
       await InvestmentService._addRecordToUserSharesFlow(userShares);
-      await InvestmentService._checkNetSharePositive(disInvestDto.userId);
+      await InvestmentService._checkNetSharePositive(userId);
       await sql.commitTransaction();
     } catch (error) {
       errorMessage = error.message;
@@ -167,7 +168,7 @@ export class InvestmentService {
   }
 
   /**
-   * Add a record to user_shares_flow table
+   * Add a record to user_shares_flow table.
    * @param userShares It's how many shares user invests.
    * @return - void
    */
@@ -276,10 +277,7 @@ export class InvestmentService {
       InvestmentService._checkUserCashBalance(userCashBalance);
       const withdrawData = InvestmentService._preAddRecordToUserCashFlow(withdrawDto);
       const { balance } = userCashBalance;
-      const amount = new Amount();
-      amount.initBalanceAmount = balance;
-      amount.depositAmount = withdrawData.deposit;
-      amount.withdrawAmount = withdrawData.withdraw;
+      const amount = InvestmentService._genAmount(balance, withdrawData.deposit, withdrawData.withdraw);
       await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
       const newUserCashBalance = await InvestmentService._preUpdateUserCashBalance(withdrawDto.userId, amount, sql);
       await InvestmentService._updateUserCashBalance(newUserCashBalance, withdrawData, sql);
@@ -342,6 +340,21 @@ export class InvestmentService {
   }
 
   /**
+   * Get an instance of Amount class.
+   * @param balanceAmount It's a balance amount.
+   * @param depositAmount It's a deposit amount.
+   * @param withdrawAmount It's a withdraw amount.
+   * @return Amount It's an instance of Amount class.
+   */
+  private static _genAmount(balanceAmount: number, depositAmount: number, withdrawAmount): Amount {
+    const amount = new Amount();
+    amount.initBalanceAmount = balanceAmount;
+    amount.depositAmount = depositAmount;
+    amount.withdrawAmount = withdrawAmount;
+    return amount;
+  }
+
+  /**
    * Update user_cash_balance table.
    * @param userCashBalance It's UserCashBalance entity.
    * @param withDraw It's WithDraw entity.
@@ -396,7 +409,8 @@ export class InvestmentService {
    * @param sql It's TypeORM QueryRunner.
    * @return - void
    */
-  private static async _getUserSharesFlowRecords(fromAt: string, toAt: string, sql: QueryRunner): Promise<UserSharesFlow[]> {
+  private static async _getUserSharesFlowRecords(fromAt: string, toAt: string, sql: QueryRunner)
+    : Promise<UserSharesFlow[]> {
     const fromAtUnix = dayjs(fromAt).unix();
     const toAtUnix = dayjs(toAt).unix();
     return await sql.manager.getRepository(UserSharesFlow).find({
@@ -406,7 +420,7 @@ export class InvestmentService {
 
   /**
    * Calculate user's investment shares.
-   * @param userSharesRecords It's records from user_shares_flow table
+   * @param userSharesRecords It's records from user_shares_flow table.
    * @return - {totalShares,userSharesMap}
    */
   private static _calculateUserShares(userSharesRecords: UserSharesFlow[])
@@ -424,7 +438,7 @@ export class InvestmentService {
   }
 
   /**
-   * Prepare payload for update user_shares_balance table
+   * Prepare payload for update user_shares_balance table.
    * @param totalShares It's a total number about the whole shares.
    * @param userSharesMap It's a map that store every user's shares.
    * @return - { userIds, updateUserShareRows }
@@ -438,12 +452,21 @@ export class InvestmentService {
       const userSharesBalance = new UserSharesBalance();
       userSharesBalance.userId = userId;
       userSharesBalance.balance = balance.toString();
-      userSharesBalance.proportion = (balance.toNumber()) ? new BigNumber(balance.dividedBy(totalShares).times(100)).toNumber() : 0;
+      userSharesBalance.proportion = InvestmentService._calculateProportion(balance, totalShares);
       userSharesBalance.updatedAt = new Date();
       updateUserShareRows.push(userSharesBalance);
       userIds.push(userId);
     }
     return { userIds, updateUserShareRows };
+  }
+  /**
+   * Calculate investment shares proportion.
+   * @param balance It's a balance amount.
+   * @param totalShares It's a total shares number.
+   * @return - number
+   */
+  private static _calculateProportion(balance: BigNumber, totalShares: number):number {
+    return (balance.toNumber()) ? new BigNumber(balance.dividedBy(totalShares).times(100)).toNumber() : 0;
   }
 
   /**
@@ -529,7 +552,7 @@ export class InvestmentService {
 
   /**
    * Is claim date in the max claimable season?
-   * @param createdAt
+   * @param createdAt It's a create datetime.
    * @return - boolean
    */
   private _isClaimDateAvailable(createdAt: Date): boolean {
@@ -690,7 +713,7 @@ export class InvestmentService {
   }
 
   /**
-   * Add record th user_cash_flow table
+   * Add record th user_cash_flow table.
    * @param userCashFlowRecord It's a payload for adding to user_cash_flow table.
    * @param sql It's TypeORM queryRunner.
    * @return - void
