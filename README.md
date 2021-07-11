@@ -22,9 +22,10 @@ JWT_SECRET=thundercore
 MAX_CLAIM_SEASON=1
 ```
 
-## API Feature
+## API Features
 1. Only POST /managers, POST /manager/login no needs to do API authentication.
 2. Suggest test the API by the sequence in /postman/api-collection.
 3. Please add managers and users by calling API first.  
 4. There is a **cronjob** run in the backround to do a auto task for the exam operation.
 5. The system also consider phantom READ problems when running SQL query.
+6. JWT token will be expired in one day.
