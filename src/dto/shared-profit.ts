@@ -1,17 +1,20 @@
 import {
   IsDecimal,
-  IsNotEmpty, IsNumberString
+  IsNotEmpty, IsNumberString, Validate
 } from 'class-validator';
+import { AmountRule } from '../service/validation';
 
 export class SharedProfitDto {
   @IsDecimal()
   @IsNumberString()
   @IsNotEmpty()
+  @Validate(AmountRule)
   income: string;
 
   @IsDecimal()
   @IsNumberString()
   @IsNotEmpty()
+  @Validate(AmountRule)
   outcome: string;
 }
 

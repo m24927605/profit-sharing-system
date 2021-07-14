@@ -1,8 +1,10 @@
 import {
   IsDecimal,
   IsNotEmpty,
-  IsString
+  IsString,
+  Validate
 } from 'class-validator';
+import { AmountRule } from '../service/validation';
 
 export class ClaimDto {
   @IsString()
@@ -17,6 +19,7 @@ export class InvestOrDisInvestDto {
 
   @IsDecimal()
   @IsNotEmpty()
+  @Validate(AmountRule)
   amount: string;
 }
 
@@ -27,12 +30,8 @@ export class WithdrawDto {
 
   @IsDecimal()
   @IsNotEmpty()
+  @Validate(AmountRule)
   amount: string;
-}
-
-export class ClaimBooking {
-  id: string;
-  userId: string;
 }
 
 export class UserShares {
@@ -40,9 +39,4 @@ export class UserShares {
   userId: string;
   invest: string;
   disinvest: string;
-}
-
-export class UserSharesBalanceData {
-  userId: string;
-  balance: string;
 }
