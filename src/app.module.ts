@@ -6,23 +6,13 @@ import {
   NestModule,
   RequestMethod
 } from '@nestjs/common';
-
+import { ScheduleModule } from '@nestjs/schedule';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthMiddleware } from './middleware/auth';
 import { InvestmentModule } from './module/investment';
 import { ManagerModule } from './module/manager';
-import { UserModule } from './module/user';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Manager } from './entity/manager';
-import { User } from './entity/user';
-import { ClaimBooking } from './entity/claim-booking';
-import { CompanySharedProfitBalance } from './entity/company-shared-profit-balance';
-import { CompanySharedProfitFlow } from './entity/company-shared-profit-flow';
-import { UserCashBalance } from './entity/user-cash-balance';
-import { UserCashFlow } from './entity/user-cash-flow';
-import { UserSharesBalance } from './entity/user-shares-balance';
-import { UserSharesFlow } from './entity/user-shares-flow';
 import { TaskModule } from './module/task';
-import { ScheduleModule } from '@nestjs/schedule';
+import { UserModule } from './module/user';
 
 
 @Module({
@@ -37,17 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       username: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [
-        ClaimBooking,
-        CompanySharedProfitBalance,
-        CompanySharedProfitFlow,
-        Manager,
-        User,
-        UserCashBalance,
-        UserCashFlow,
-        UserSharesBalance,
-        UserSharesFlow,
-      ],
+      entities: [__dirname + '/entity/*.{ts,js}'],
       //synchronize: true,
       logging: true
     }),

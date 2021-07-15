@@ -21,6 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@golevelup/nestjs-testing": "^0.1.2",
     "@nestjs/common": "^7.6.15",
     "@nestjs/config": "^0.6.3",
     "@nestjs/core": "^7.6.15",
@@ -38,6 +39,7 @@
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^6.6.6",
+    "sinon": "^11.1.1",
     "typeorm": "^0.2.34"
   },
   "devDependencies": {
@@ -68,7 +70,8 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "node"
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
@@ -79,6 +82,10 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
+    "moduleDirectories": [
+      "node_modules",
+      "src"
+    ],
     "testEnvironment": "node"
   }
 }
