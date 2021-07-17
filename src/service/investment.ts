@@ -2,9 +2,10 @@ import BigNumber from 'bignumber.js';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
+  EntityManager,
   getConnection,
-  Raw,
-  Repository
+  getManager,
+  Raw
 } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
@@ -14,23 +15,32 @@ import {
   UserShares,
   WithdrawDto
 } from '../dto/investment';
-import { SharedProfit } from '../dto/shared-profit';
+import { SharedProfit, SharedProfitDto } from '../dto/shared-profit';
 import { ClaimBooking } from '../entity/claim-booking';
 import { UserCashBalance } from '../entity/user-cash-balance';
 import { UserCashFlow } from '../entity/user-cash-flow';
 import { UserSharesBalance } from '../entity/user-shares-balance';
 import { UserSharesFlow } from '../entity/user-shares-flow';
-import { CompanySharedProfitFlow as ComProfitFlow } from '../entity/company-shared-profit-flow';
+import {
+  CompanySharedProfitFlow,
+  CompanySharedProfitFlow as ComProfitFlow
+} from '../entity/company-shared-profit-flow';
 import { CompanySharedProfitBalance as ComProfitBalance } from '../entity/company-shared-profit-balance';
 import { ClaimState } from '../util/state';
 import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
 import {
   Amount,
-  RepositoryService,
   TimeService
 } from './base';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ClaimBookingRepository } from '../repository/claim-booking';
+import { CompanyProfitBalanceRepository } from '../repository/company-shared-profit-balance';
+import { CompanyProfitFlowRepository } from '../repository/company-shared-profit-flow';
+import { UserCashBalanceRepository } from '../repository/user-cash-balance';
+import { UserCashFlowRepository } from '../repository/user-cash-flow';
+import { UserSharesBalanceRepository } from '../repository/user-shares-balance';
+import { UserSharesFlowRepository } from '../repository/user-shares-flow';
 
 dayjs.extend(quarterOfYear);
 
@@ -41,55 +51,41 @@ export class InvestmentService {
   private static readonly _noNeedShareMessage = 'No need to share profit.';
 
   constructor(
-    @InjectRepository(ClaimBooking)
-    private readonly _claimBookingRepo: Repository<ClaimBooking>,
-    @InjectRepository(UserCashBalance)
-    private readonly _userCashBalanceRepo: Repository<UserCashBalance>,
-    @InjectRepository(UserCashFlow)
-    private readonly _userCashFlowRepo: Repository<UserCashFlow>,
-    @InjectRepository(UserSharesBalance)
-    private readonly _userSharesBalanceRepo: Repository<UserSharesBalance>,
+    private readonly _claimBookingRepo: ClaimBookingRepository,
+    private readonly _userCashBalanceRepo: UserCashBalanceRepository,
+    private readonly _userCashFlowRepo: UserCashFlowRepository,
+    private readonly _userSharesBalanceRepo: UserSharesBalanceRepository,
     @InjectRepository(UserSharesFlow)
-    private readonly _userSharesFlowRepo: Repository<UserSharesFlow>,
-    @InjectRepository(ComProfitBalance)
-    private readonly _comProfitBalanceRepo: Repository<ComProfitBalance>,
-    @InjectRepository(ComProfitFlow)
-    private readonly _comProfitFlowRepo: Repository<ComProfitFlow>
+    private readonly _userSharesFlowRepo: UserSharesFlowRepository,
+    private readonly _comProfitBalanceRepo: CompanyProfitBalanceRepository,
+    private readonly _comProfitFlowRepo: CompanyProfitFlowRepository
   ) {
   }
 
   /**
    * For adding the company profit.
-   * @param sharedProfit - It's the money that the company want to store in or take it out.
+   * @param sharedProfitDto - It's the money that the company want to store in or take it out.
    * @return - void
    */
-  public async addProfit(sharedProfit: SharedProfit): Promise<void> {
-    const connection = getConnection();
-    const sql = connection.createQueryRunner();
-    let errorMessage = '';
-    await sql.connect();
-    await sql.startTransaction();
-    try {
-      await this._recordComProfitFlow(sharedProfit);
-      const netAddProfit = await InvestmentService._calculateNetAddProfit(sharedProfit);
-      await this._refreshComProfitBalance(netAddProfit);
-      await sql.commitTransaction();
-    } catch (error) {
-      errorMessage = error.message;
-      await sql.rollbackTransaction();
-    } finally {
-      await sql.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+  public async addProfit(sharedProfitDto: SharedProfitDto): Promise<void> {
+    await getManager().transaction(async sql => {
+      const comSharedProfitFlow = new CompanySharedProfitFlow();
+      comSharedProfitFlow.income = new BigNumber(sharedProfitDto.income).toNumber();
+      comSharedProfitFlow.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
+      await this._recordComProfitFlow(comSharedProfitFlow, sql);
+      const netAddProfit = await InvestmentService._calculateNetAddProfit(comSharedProfitFlow);
+      await this._refreshComProfitBalance(netAddProfit, sql);
+    });
   }
 
   /**
    * Add a record to company_shared_profit_flow table.
-   * @param sharedProfit - It's the money that the company want to store in or take it out.
+   * @param comSharedProfitFlow - It's the money that the company want to store in or take it out.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _recordComProfitFlow(sharedProfit: SharedProfit): Promise<void> {
-    await this._comProfitFlowRepo.insert(sharedProfit);
+  private async _recordComProfitFlow(comSharedProfitFlow: CompanySharedProfitFlow, sql: EntityManager): Promise<void> {
+    await this._comProfitFlowRepo.create(comSharedProfitFlow, sql);
   }
 
   /**
@@ -105,12 +101,14 @@ export class InvestmentService {
   /**
    * Refresh company_shared_profit_balance table.
    * @param netAddProfit - It's a net value about the company needs to share.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _refreshComProfitBalance(netAddProfit: number): Promise<void> {
-    const profitBalance = await this._comProfitBalanceRepo.findOne(InvestmentService._comId);
+  private async _refreshComProfitBalance(netAddProfit: number, sql: EntityManager): Promise<void> {
+    const condition = { id: InvestmentService._comId };
+    const profitBalance = await this._comProfitBalanceRepo.getOne(condition);
     const comProfitBalance = await InvestmentService._preRefreshComProfitBalance(netAddProfit, profitBalance);
-    await RepositoryService.insertOrUpdate(this._comProfitBalanceRepo, comProfitBalance);
+    await this._comProfitBalanceRepo.createOrUpdate(comProfitBalance, sql);
   }
 
   /**
@@ -145,24 +143,12 @@ export class InvestmentService {
    * @return - void
    */
   public async disinvest(disInvestDto: InvestOrDisInvestDto): Promise<void> {
-    const { userId, amount } = disInvestDto;
-    const connection = getConnection();
-    const sql = connection.createQueryRunner();
-    let errorMessage = '';
-    await sql.connect();
-    await sql.startTransaction();
-    try {
+    await getManager().transaction(async sql => {
+      const { userId, amount } = disInvestDto;
       const userShares = await InvestmentService._preAddRecordUserSharesFlow(userId, undefined, amount);
-      await this._addRecordToUserSharesFlow(userShares);
+      await this._addRecordToUserSharesFlow(userShares, sql);
       await this._checkNetSharePositive(userId);
-      await sql.commitTransaction();
-    } catch (error) {
-      errorMessage = error.message;
-      await sql.rollbackTransaction();
-    } finally {
-      await sql.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+    });
   }
 
   /**
@@ -173,8 +159,8 @@ export class InvestmentService {
    * @return UserShares It's UserShares entity.
    */
   private static async _preAddRecordUserSharesFlow(userId: string, investAmount?: string, disInvestAmount?: string)
-    : Promise<UserShares> {
-    const userShares = new UserShares();
+    : Promise<UserSharesFlow> {
+    const userShares = new UserSharesFlow();
     userShares.id = UtilService.genUniqueId();
     userShares.userId = userId;
     userShares.invest = (investAmount) ? (investAmount) : new BigNumber(0).toString();
@@ -185,10 +171,11 @@ export class InvestmentService {
   /**
    * Add a record to user_shares_flow table.
    * @param userShares It's how many shares user invests.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _addRecordToUserSharesFlow(userShares: UserShares): Promise<void> {
-    await this._userSharesFlowRepo.insert(userShares);
+  private async _addRecordToUserSharesFlow(userShares: UserSharesFlow, sql?: EntityManager): Promise<void> {
+    await this._userSharesFlowRepo.create(userShares, sql);
   }
 
   /**
@@ -197,7 +184,7 @@ export class InvestmentService {
    * @return - void
    */
   private async _checkNetSharePositive(userId: string): Promise<void> {
-    const userSharesFlowRecords = await this._userSharesFlowRepo.find({ where: { userId } });
+    const userSharesFlowRecords = await this._userSharesFlowRepo.list({ where: { userId } });
     let netShares = new BigNumber(0);
     for (const { invest, disinvest } of userSharesFlowRecords) {
       netShares = netShares.plus(new BigNumber(invest)).minus(disinvest);
@@ -226,12 +213,13 @@ export class InvestmentService {
    * @return - void
    */
   private async _getClaimBookingRecords(userId: string) {
-    return await this._claimBookingRepo.find({
+    const condition = {
       where: {
         status: ClaimState.INIT,
         userId
       }
-    });
+    };
+    return await this._claimBookingRepo.list(condition);
   }
 
   /**
@@ -252,7 +240,7 @@ export class InvestmentService {
    * @return - void
    */
   private async _refreshClaimBooking(claimBooking: ClaimBooking) {
-    await RepositoryService.insertOrUpdate(this._claimBookingRepo, claimBooking);
+    await this._claimBookingRepo.createOrUpdate(claimBooking);
   }
 
   /**
@@ -278,12 +266,7 @@ export class InvestmentService {
    * @return - void
    */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
-    const connection = getConnection();
-    const sql = connection.createQueryRunner();
-    let errorMessage = '';
-    await sql.connect();
-    await sql.startTransaction();
-    try {
+    await getManager().transaction(async sql => {
       const userCashBalance = await this._getUserCashBalance(withdrawDto.userId);
       InvestmentService._checkUserCashBalance(userCashBalance);
       const withdrawData = InvestmentService._preAddRecordToUserCashFlow(withdrawDto);
@@ -291,16 +274,9 @@ export class InvestmentService {
       const amount = InvestmentService._genAmount(balance, withdrawData.deposit, withdrawData.withdraw);
       await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
       const newUserCashBalance = await this._preUpdateUserCashBalance(withdrawDto.userId, amount);
-      await this._updateUserCashBalance(newUserCashBalance, withdrawData);
-      await this._addRecordToUserCashFlow(withdrawData);
-      await sql.commitTransaction();
-    } catch (error) {
-      errorMessage = error.message;
-      await sql.rollbackTransaction();
-    } finally {
-      await sql.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+      await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
+      await this._addRecordToUserCashFlow(withdrawData, sql);
+    });
   }
 
   /**
@@ -309,7 +285,8 @@ export class InvestmentService {
    * @return - void
    */
   private async _getUserCashBalance(userId: string) {
-    return await this._userCashBalanceRepo.findOne(userId);
+    const condition = { userId };
+    return await this._userCashBalanceRepo.getOne(condition);
   }
 
   /**
@@ -366,19 +343,12 @@ export class InvestmentService {
   /**
    * Update user_cash_balance table.
    * @param userCashBalance It's UserCashBalance entity.
-   * @param withDraw It's WithDraw entity.
+   * @param userCashFlow It's UserCashFlow entity.
    * @return - void
    */
-  private async _updateUserCashBalance(userCashBalance: UserCashBalance, withDraw: UserCashFlow)
+  private async _updateUserCashBalanceForWithdraw(userCashBalance: UserCashBalance, userCashFlow: UserCashFlow)
     : Promise<void> {
-    await this._userCashBalanceRepo.createQueryBuilder().update(UserCashBalance)
-      .set(userCashBalance)
-      // To avoid phantom READ,balance - withdraw >= 0
-      .where('balance - :withdraw >= 0 AND userId = :userId', {
-        withdraw: withDraw.withdraw,
-        userId: withDraw.userId
-      })
-      .execute();
+    await this._userCashBalanceRepo.updateForWithdraw(userCashFlow.withdraw, userCashBalance);
   }
 
   /**
@@ -388,26 +358,14 @@ export class InvestmentService {
    * @return - void
    */
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
-    let errorMessage = '';
-    const connection = getConnection();
-    const sql = connection.createQueryRunner();
-    await sql.connect();
-    await sql.startTransaction();
-    try {
+    await getManager().transaction(async sql => {
       const userSharesFlowRecords = await this._getUserSharesFlowRecords(fromAt, toAt);
       const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
       const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
       await InvestmentService._checkUserShares(userIds, updateUserShareRows);
-      await this._deleteUserSharesBalance(userIds);
+      await this._deleteUserSharesBalance(userIds, sql);
       await this._addRecordsToUserSharesBalance(updateUserShareRows);
-      await sql.commitTransaction();
-    } catch (error) {
-      errorMessage = error.message;
-      await sql.rollbackTransaction();
-    } finally {
-      await sql.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+    });
   }
 
   /**
@@ -420,7 +378,7 @@ export class InvestmentService {
     : Promise<UserSharesFlow[]> {
     const fromAtUnix = dayjs(fromAt).unix();
     const toAtUnix = dayjs(toAt).unix();
-    return await this._userSharesFlowRepo.find({
+    return await this._userSharesFlowRepo.list({
       createdAt: Raw(alias => `unix_timestamp(${alias}) >= ${fromAtUnix} AND unix_timestamp(${alias}) < ${toAtUnix}`)
     });
   }
@@ -492,20 +450,21 @@ export class InvestmentService {
   /**
    * Delete rows in user_shares_balance table.
    * @param userIds It's a user list.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _deleteUserSharesBalance(userIds: string[]): Promise<void> {
+  private async _deleteUserSharesBalance(userIds: string[], sql: EntityManager): Promise<void> {
     // Delete old data
-    await this._userSharesBalanceRepo.delete(userIds);
+    await this._userSharesBalanceRepo.delete(userIds, sql);
   }
 
   /**
    * Add records in user_shares_balance table.
-   * @param updateUserShareRows It's a list that wants to update in user_shares_balance table.
+   * @param userSharesBalanceRows It's a list that wants to update in user_shares_balance table.
    * @return - void
    */
-  private async _addRecordsToUserSharesBalance(updateUserShareRows: UserSharesBalance[]) {
-    await this._userSharesBalanceRepo.insert(updateUserShareRows);
+  private async _addRecordsToUserSharesBalance(userSharesBalanceRows: UserSharesBalance[]) {
+    await this._userSharesBalanceRepo.create(userSharesBalanceRows);
   }
 
   /**
@@ -513,7 +472,7 @@ export class InvestmentService {
    * @return string[] It's qualified claimer list.
    */
   public async getQualifiedClaimers(): Promise<string[]> {
-    const claimBookingRecords = await this._claimBookingRepo.find({ status: ClaimState.INIT });
+    const claimBookingRecords = await this._claimBookingRepo.list({ status: ClaimState.INIT });
     return await this._getQualifiedClaimers(claimBookingRecords);
   }
 
@@ -537,7 +496,7 @@ export class InvestmentService {
    * @return - void
    */
   public async setNotQualifiedClaimersExpired(): Promise<void> {
-    const claimBookingRecords = await this._claimBookingRepo.find({ status: ClaimState.INIT });
+    const claimBookingRecords = await this._claimBookingRepo.list({ status: ClaimState.INIT });
     await this._setNotQualifiedClaimersExpired(claimBookingRecords);
   }
 
@@ -588,12 +547,14 @@ export class InvestmentService {
    * @return payableClaimers - It's a list that company needs to pay.
    */
   public async getPayableClaimers(shareProfitClaimerIds: string[]): Promise<Map<string, BigNumber>> {
-    const { balance } = await this._comProfitBalanceRepo.findOne(InvestmentService._comId);
-    const userSharesBalanceRecords = await this._userSharesBalanceRepo.findByIds(shareProfitClaimerIds);
+    const condition = { id: InvestmentService._comId };
+    const { balance } = await this._comProfitBalanceRepo.getOne(condition);
+    const userSharesBalanceRecords = await this._userSharesBalanceRepo.listByIds(shareProfitClaimerIds);
     const payableClaimers = new Map<string, BigNumber>();
     for (const { userId, proportion } of userSharesBalanceRecords) {
       // proportion is base on 100% expression so needs to be divided by 100 to times balance amount.
-      const payableAmount = new BigNumber(proportion).dividedBy(100).times(new BigNumber(balance));
+      const oneHundredPercent = 100;
+      const payableAmount = new BigNumber(proportion).dividedBy(oneHundredPercent).times(new BigNumber(balance));
       payableClaimers.set(userId, payableAmount);
     }
     return payableClaimers;
@@ -605,25 +566,13 @@ export class InvestmentService {
    * @return - void
    */
   public async shareProfit(payableClaimers: Map<string, BigNumber>): Promise<void> {
-    await InvestmentService._checkClaimers(payableClaimers);
-    const connection = getConnection();
-    const sql = connection.createQueryRunner();
-    let errorMessage = '';
-    await sql.connect();
-    await sql.startTransaction();
-    try {
+    await getManager().transaction(async sql => {
+      await InvestmentService._checkClaimers(payableClaimers);
       const totalPayableProfit = InvestmentService._calculateTotalPayableAmount(payableClaimers);
       await InvestmentService._checkIfCompanyNeedPay(totalPayableProfit);
-      await this.runUserOperation(payableClaimers);
-      await this.runCompOperation(totalPayableProfit);
-      await sql.commitTransaction();
-    } catch (error) {
-      errorMessage = error.message;
-      await sql.rollbackTransaction();
-    } finally {
-      await sql.release();
-    }
-    if (errorMessage) throw new Error(errorMessage);
+      await this.runUserOperation(payableClaimers, sql);
+      await this.runCompOperation(totalPayableProfit, sql);
+    });
   }
 
   /**
@@ -640,24 +589,26 @@ export class InvestmentService {
   /**
    * Run user operation.
    * @param payableClaimers It's a list that company needs to pay.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async runUserOperation(payableClaimers: Map<string, BigNumber>): Promise<void> {
-    await this._updatePayableUserCashFlow(payableClaimers);
+  private async runUserOperation(payableClaimers: Map<string, BigNumber>, sql: EntityManager): Promise<void> {
+    await this._updatePayableUserCashFlow(payableClaimers, sql);
     await this._updatePayableUserCashBalance(payableClaimers);
   }
 
   /**
    * Run company operation.
    * @param totalPayableProfit It's a sum value about the company total need to pay.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async runCompOperation(totalPayableProfit): Promise<void> {
+  private async runCompOperation(totalPayableProfit, sql: EntityManager): Promise<void> {
     const companySharedProfitFlow = InvestmentService._preInsertCompSharedProfitFlow(totalPayableProfit);
-    await this._comProfitFlowRepo.insert(companySharedProfitFlow);
+    await this._recordComProfitFlow(companySharedProfitFlow, sql);
     const { outcome } = companySharedProfitFlow;
     const updateProfitBalance = await this._preUpdateCompProfitBalance(InvestmentService._comId, outcome);
-    await this._updateCompProfitBalance(updateProfitBalance, outcome);
+    await this._updateCompProfitBalance(outcome, updateProfitBalance);
   }
 
   /**
@@ -688,11 +639,12 @@ export class InvestmentService {
   /**
    * Update user's cash flow if the user is available to gain the shared profit.
    * @param profitClaimers It's a list that company needs to pay.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _updatePayableUserCashFlow(profitClaimers: Map<string, BigNumber>) {
+  private async _updatePayableUserCashFlow(profitClaimers: Map<string, BigNumber>, sql: EntityManager) {
     for (const [userId, payableAmount] of profitClaimers.entries()) {
-      await this._allocateFunds(userId, payableAmount.toNumber());
+      await this._allocateFunds(userId, payableAmount.toNumber(), sql);
     }
   }
 
@@ -700,24 +652,26 @@ export class InvestmentService {
    * Company distribute the shared profit to user.
    * @param userId It's the id of the user.
    * @param payableAmount It's the amount company needs to pay.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _allocateFunds(userId, payableAmount: number): Promise<void> {
+  private async _allocateFunds(userId, payableAmount: number, sql: EntityManager): Promise<void> {
     const userCashFlow = new UserCashFlow();
     userCashFlow.id = UtilService.genUniqueId();
     userCashFlow.userId = userId;
     userCashFlow.deposit = new BigNumber(payableAmount).toNumber();
     userCashFlow.withdraw = 0;
-    await this._addRecordToUserCashFlow(userCashFlow);
+    await this._addRecordToUserCashFlow(userCashFlow, sql);
   }
 
   /**
    * Add record th user_cash_flow table.
    * @param userCashFlowRecord It's a payload for adding to user_cash_flow table.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _addRecordToUserCashFlow(userCashFlowRecord: UserCashFlow) {
-    await this._userCashFlowRepo.insert(userCashFlowRecord);
+  private async _addRecordToUserCashFlow(userCashFlowRecord: UserCashFlow, sql: EntityManager) {
+    await this._userCashFlowRepo.create(userCashFlowRecord, sql);
   }
 
   /**
@@ -728,19 +682,20 @@ export class InvestmentService {
   private async _updatePayableUserCashBalance(profitClaimers: Map<string, BigNumber>)
     : Promise<void> {
     for (const [userId, payableAmount] of profitClaimers.entries()) {
-      const userCashBalance = await this._userCashBalanceRepo.findOne(userId);
+      const condition = { userId };
+      const userCashBalance = await this._userCashBalanceRepo.getOne(condition);
       await this.initializeUserCashBalance(userId, userCashBalance);
       const amount = new Amount();
       amount.initBalanceAmount = (userCashBalance) ? userCashBalance.balance : 0;
       amount.depositAmount = payableAmount.toNumber();
       const updateCashBalance = await this._preUpdateUserCashBalance(userId, amount);
-      await this._userCashBalanceRepo.update(userId, updateCashBalance);
+      await this._userCashBalanceRepo.update(condition, updateCashBalance);
       await this._setFinishToQualifiedClaimer(userId);
     }
   }
 
   /**
-   * Check user's balance amount in user_cash_balance table.
+   * Initialize user's balance amount in user_cash_balance table if the record is not exists.
    * @param userId It's the id of the user.
    * @param balance It's balance amount of the user in user_cash_balance table.
    * @return - void
@@ -752,7 +707,7 @@ export class InvestmentService {
     const userCashBalance = new UserCashBalance();
     userCashBalance.userId = userId;
     userCashBalance.balance = 0;
-    await RepositoryService.insertOrUpdate(this._userCashBalanceRepo, userCashBalance);
+    await this._userCashBalanceRepo.create(userCashBalance);
   }
 
   /**
@@ -763,7 +718,8 @@ export class InvestmentService {
    */
   private async _preUpdateUserCashBalance(userId: string, amount: Amount)
     : Promise<UserCashBalance> {
-    const updateCashBalance = await this._userCashBalanceRepo.findOne(userId);
+    const condition = { userId };
+    const updateCashBalance = await this._userCashBalanceRepo.getOne(condition);
     updateCashBalance.balance = amount.balanceAmount;
     return updateCashBalance;
   }
@@ -774,18 +730,13 @@ export class InvestmentService {
    * @return - void
    */
   private async _setFinishToQualifiedClaimer(userId: string): Promise<void> {
-    const claimBooking = await this._claimBookingRepo.findOne({
+    const condition = {
       userId,
       status: ClaimState.INIT
-    });
+    };
+    const claimBooking = await this._claimBookingRepo.getOne(condition);
     claimBooking.status = ClaimState.FINISH;
-    await this._claimBookingRepo.createQueryBuilder().update(ClaimBooking)
-      .set(claimBooking)
-      .where('userId = :userId AND status = :claimState', {
-        userId,
-        claimState: ClaimState.INIT
-      })
-      .execute();
+    await this._claimBookingRepo.update(condition, claimBooking);
   }
 
   /**
@@ -808,7 +759,8 @@ export class InvestmentService {
    */
   private async _preUpdateCompProfitBalance(companyId: number, outcome: number)
     : Promise<ComProfitBalance> {
-    const companyProfitBalance = await this._comProfitBalanceRepo.findOne(companyId);
+    const condition = { id: companyId };
+    const companyProfitBalance = await this._comProfitBalanceRepo.getOne(condition);
     const updateBalance = new BigNumber(companyProfitBalance.balance).minus(outcome).toNumber();
     companyProfitBalance.id = companyId;
     companyProfitBalance.balance = updateBalance;
@@ -817,19 +769,11 @@ export class InvestmentService {
 
   /**
    * Update company profit balance.
-   * @param profitBalance It's a payload that for updating company_shared_profit_balance table
    * @param outcome It's amount that company needs to pay.
+   * @param profitBalance It's a payload that for updating company_shared_profit_balance table
    * @return - void
    */
-  private async _updateCompProfitBalance(
-    profitBalance: ComProfitBalance, outcome: number) {
-    await this._comProfitBalanceRepo.createQueryBuilder().update(ComProfitBalance)
-      .set(profitBalance)
-      // To avoid phantom READ,balance - outcome >= 0
-      .where('balance - :outcome >= 0 AND id = :id', {
-        outcome,
-        id: InvestmentService._comId
-      })
-      .execute();
+  private async _updateCompProfitBalance(outcome: number, profitBalance: ComProfitBalance) {
+    await this._comProfitBalanceRepo.updateOutcome(InvestmentService._comId, outcome, profitBalance);
   }
 }

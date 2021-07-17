@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ManagerController } from '../controller/manager';
-import { ManagerService } from '../service/manager';
 import { JwtModule } from '@nestjs/jwt';
+import { ManagerController } from '../controller/manager';
+import { ManagerRepository } from '../repository/manager';
+import { ManagerService } from '../service/manager';
 
 @Module({
   imports: [
@@ -13,8 +14,9 @@ import { JwtModule } from '@nestjs/jwt';
     ManagerController
   ],
   providers: [
+    ManagerRepository,
     ManagerService
-  ],
+  ]
 })
 export class ManagerModule {
 }
