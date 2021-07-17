@@ -56,7 +56,7 @@ export class InvestmentController {
       const sharedProfit = new SharedProfit();
       sharedProfit.income = new BigNumber(sharedProfitDto.income).toNumber();
       sharedProfit.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
-      await this._investmentService.addProfit(sharedProfit);
+      await this._investmentService.addProfit(sharedProfitDto);
       const passResponse = UtilController.passHandler('add shared profit successfully.');
       res.status(passResponse.status).json(passResponse);
     } catch (e) {

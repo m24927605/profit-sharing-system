@@ -29,12 +29,12 @@ import { UserModule } from './module/user';
       database: process.env.DB_DATABASE,
       entities: [__dirname + '/entity/*.{ts,js}'],
       //synchronize: true,
-      logging: true
+      logging: ['query', 'error']
     }),
     InvestmentModule,
     ManagerModule,
     TaskModule,
-    UserModule,
+    UserModule
   ]
 })
 
