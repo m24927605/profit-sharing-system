@@ -161,6 +161,7 @@ export class InvestmentService {
   /**
    * It's a transaction handler for user disinvest.
    * @param disInvestDto It's a DTO object from API request.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
   public async disinvestTxHandler(disInvestDto: InvestOrDisInvestDto, sql: EntityManager): Promise<void> {
@@ -293,6 +294,7 @@ export class InvestmentService {
   /**
    * It's a transaction handler for user withdraw the money from the company share the profit.
    * @param withdrawDto It's a DTO object from API request.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
   public async withdrawTxHandler(withdrawDto: WithdrawDto, sql: EntityManager): Promise<void> {
@@ -392,9 +394,10 @@ export class InvestmentService {
   }
 
   /**
-   * It's a transactin halder for settling user's investment shares.
+   * It's a transaction handler for settling user's investment shares.
    * @param fromAt It's started date about settle.
    * @param toAt It's ended date about settle.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
   public async settleUserSharesTxHandler(fromAt: string, toAt: string, sql: EntityManager): Promise<void> {
@@ -612,6 +615,7 @@ export class InvestmentService {
   /**
    * It's a transaction handler for company sharing profit to investor.
    * @param payableClaimers It's a list that company needs to pay.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
   public async shareProfitTxHandler(payableClaimers: Map<string, BigNumber>, sql: EntityManager): Promise<void> {
