@@ -1,7 +1,4 @@
-import { mocked } from 'ts-jest/utils';
-import typeorm, {
-  Connection,
-  getRepository,
+import {
   Repository
 } from 'typeorm';
 import { UniqueID } from 'nodejs-snowflake';
@@ -10,17 +7,14 @@ import {
   Test,
   TestingModule
 } from '@nestjs/testing';
-import { ClaimBooking } from '../../entity/claim-booking';
-import {
-  CompanySharedProfitBalance as ComProfitBalance
-} from '../../entity/company-shared-profit-balance';
-import {
-  CompanySharedProfitFlow as ComProfitBalanceFlow
-} from '../../entity/company-shared-profit-flow';
-import { UserCashBalance } from '../../entity/user-cash-balance';
-import { UserCashFlow } from '../../entity/user-cash-flow';
 import { UserSharesBalance } from '../../entity/user-shares-balance';
-import { UserSharesFlow } from '../../entity/user-shares-flow';
+import { ClaimBookingRepository } from '../../repository/claim-booking';
+import { CompanyProfitBalanceRepository } from '../../repository/company-shared-profit-balance';
+import { CompanyProfitFlowRepository } from '../../repository/company-shared-profit-flow';
+import { UserCashBalanceRepository } from '../../repository/user-cash-balance';
+import { UserCashFlowRepository } from '../../repository/user-cash-flow';
+import { UserSharesBalanceRepository } from '../../repository/user-shares-balance';
+import { UserSharesFlowRepository } from '../../repository/user-shares-flow';
 import { InvestOrDisInvestDto } from '../../dto/investment';
 import { UtilService } from '../../util/service';
 import { InvestmentService } from '../investment';
@@ -31,62 +25,37 @@ describe('Test InvestmentService', () => {
   const mockId = 'mockId';
   let investmentService: InvestmentService;
   let utilServiceSpy;
-  let claimBookingRepo: Repository<ClaimBooking>;
-  let comProfitBalanceRepo: Repository<ComProfitBalance>;
-  let comProfitBalanceFlowRepo: Repository<ComProfitBalanceFlow>;
-  let userSharesFlowRepo: Repository<UserSharesFlow>;
-  let userSharesBalanceRepo: Repository<UserSharesBalance>;
-  let userCashFlowRepo: Repository<UserCashFlow>;
-  let userCashBalanceRepo: Repository<UserCashBalance>;
+  let claimBookingRepo: ClaimBookingRepository;
+  let comProfitBalanceRepo: CompanyProfitBalanceRepository;
+  let comProfitBalanceFlowRepo: CompanyProfitFlowRepository;
+  let userCashBalanceRepo: UserCashBalanceRepository;
+  let userCashFlowRepo: UserCashFlowRepository;
+  let userSharesBalanceRepo: UserSharesBalanceRepository;
+  let userSharesFlowRepo: UserSharesFlowRepository;
 
   beforeEach(async () => {
     utilServiceSpy = jest.spyOn(UtilService, 'genUniqueId');
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         InvestmentService,
         UtilService,
-        {
-          provide: getRepositoryToken(ClaimBooking),
-          useValue: {}
-        },
-        {
-          provide: getRepositoryToken(ComProfitBalanceFlow),
-          useValue: {}
-        },
-        {
-          provide: getRepositoryToken(ComProfitBalance),
-          useValue: {}
-        },
-        {
-          provide: getRepositoryToken(UserSharesFlow),
-          useValue: {
-            insert: jest.fn()
-          }
-        },
-        {
-          provide: getRepositoryToken(UserSharesBalance),
-          useValue: {}
-        },
-        {
-          provide: getRepositoryToken(UserCashFlow),
-          useValue: {
-            insert: jest.fn()
-          }
-        },
-        {
-          provide: getRepositoryToken(UserCashBalance),
-          useValue: {}
-        }
+        ClaimBookingRepository,
+        CompanyProfitBalanceRepository,
+        CompanyProfitFlowRepository,
+        UserCashBalanceRepository,
+        UserCashFlowRepository,
+        UserSharesBalanceRepository,
+        UserSharesFlowRepository
       ]
     }).compile();
-    investmentService = module.get<InvestmentService>(InvestmentService);
-    claimBookingRepo = module.get<Repository<ClaimBooking>>(getRepositoryToken(ClaimBooking));
-    comProfitBalanceRepo = module.get<Repository<ComProfitBalance>>(getRepositoryToken(ComProfitBalance));
-    comProfitBalanceFlowRepo = module.get<Repository<ComProfitBalanceFlow>>(getRepositoryToken(ComProfitBalanceFlow));
-    userSharesFlowRepo = module.get<Repository<UserSharesFlow>>(getRepositoryToken(UserSharesFlow));
-    userSharesBalanceRepo = module.get<Repository<UserSharesBalance>>(getRepositoryToken(UserSharesBalance));
-    userCashFlowRepo = module.get<Repository<UserCashFlow>>(getRepositoryToken(UserCashFlow));
-    userCashBalanceRepo = module.get<Repository<UserCashBalance>>(getRepositoryToken(UserCashBalance));
+    investmentService = moduleRef.get<InvestmentService>(InvestmentService);
+    claimBookingRepo = moduleRef.get<ClaimBookingRepository>(ClaimBookingRepository);
+    comProfitBalanceRepo = moduleRef.get<CompanyProfitBalanceRepository>(CompanyProfitBalanceRepository);
+    comProfitBalanceFlowRepo = moduleRef.get<CompanyProfitFlowRepository>(CompanyProfitFlowRepository);
+    userCashBalanceRepo = moduleRef.get<UserCashBalanceRepository>(UserCashBalanceRepository);
+    userCashFlowRepo = moduleRef.get<UserCashFlowRepository>(UserCashFlowRepository);
+    userSharesBalanceRepo = moduleRef.get<UserSharesBalanceRepository>(UserSharesBalanceRepository);
+    userSharesFlowRepo = moduleRef.get<UserSharesFlowRepository>(UserSharesFlowRepository);
   });
 
   afterEach(async () => {
@@ -99,8 +68,20 @@ describe('Test InvestmentService', () => {
   it('invest success', async () => {
     const uniqueIDSpy = jest.spyOn(UniqueID.prototype, 'getUniqueID');
     uniqueIDSpy.mockReturnValue(mockId);
+    const userId = '1';
+    const amount = '100';
     const investDto = new InvestOrDisInvestDto();
+    investDto.userId = userId;
+    investDto.amount = amount;
+    jest.spyOn(userSharesFlowRepo, 'create').mockResolvedValue(void 0);
     await investmentService.invest(investDto);
-    expect(userSharesFlowRepo.insert).toBeCalledTimes(1);
+    expect(await userSharesFlowRepo.create).toBeCalledTimes(1);
+    const mockUserShareFlow = {
+      userId: userId,
+      invest: amount,
+      disinvest: '0',
+      id: mockId
+    };
+    expect(await userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
   });
 });

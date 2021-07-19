@@ -69,13 +69,23 @@ export class InvestmentService {
    */
   public async addProfit(sharedProfitDto: SharedProfitDto): Promise<void> {
     await getManager().transaction(async sql => {
-      const comSharedProfitFlow = new CompanySharedProfitFlow();
-      comSharedProfitFlow.income = new BigNumber(sharedProfitDto.income).toNumber();
-      comSharedProfitFlow.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
-      await this._recordComProfitFlow(comSharedProfitFlow, sql);
-      const netAddProfit = await InvestmentService._calculateNetAddProfit(comSharedProfitFlow);
-      await this._refreshComProfitBalance(netAddProfit, sql);
+      await this.addProfitTxHandler(sharedProfitDto, sql);
     });
+  }
+
+  /**
+   * It's a transaction handler for adding the company profit.
+   * @param sharedProfitDto - It's the money that the company want to store in or take it out.
+   * @param sql It's a EntityManager for doing transaction.
+   * @return - void
+   */
+  public async addProfitTxHandler(sharedProfitDto: SharedProfitDto, sql: EntityManager): Promise<void> {
+    const comSharedProfitFlow = new CompanySharedProfitFlow();
+    comSharedProfitFlow.income = new BigNumber(sharedProfitDto.income).toNumber();
+    comSharedProfitFlow.outcome = new BigNumber(sharedProfitDto.outcome).toNumber();
+    await this._recordComProfitFlow(comSharedProfitFlow, sql);
+    const netAddProfit = await InvestmentService._calculateNetAddProfit(comSharedProfitFlow);
+    await this._refreshComProfitBalance(netAddProfit, sql);
   }
 
   /**
@@ -144,11 +154,20 @@ export class InvestmentService {
    */
   public async disinvest(disInvestDto: InvestOrDisInvestDto): Promise<void> {
     await getManager().transaction(async sql => {
-      const { userId, amount } = disInvestDto;
-      const userShares = await InvestmentService._preAddRecordUserSharesFlow(userId, undefined, amount);
-      await this._addRecordToUserSharesFlow(userShares, sql);
-      await this._checkNetSharePositive(userId);
+      await this.disinvestTxHandler(disInvestDto, sql);
     });
+  }
+
+  /**
+   * It's a transaction handler for user disinvest.
+   * @param disInvestDto It's a DTO object from API request.
+   * @return - void
+   */
+  public async disinvestTxHandler(disInvestDto: InvestOrDisInvestDto, sql: EntityManager): Promise<void> {
+    const { userId, amount } = disInvestDto;
+    const userShares = await InvestmentService._preAddRecordUserSharesFlow(userId, undefined, amount);
+    await this._addRecordToUserSharesFlow(userShares, sql);
+    await this._checkNetSharePositive(userId);
   }
 
   /**
@@ -267,16 +286,25 @@ export class InvestmentService {
    */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
     await getManager().transaction(async sql => {
-      const userCashBalance = await this._getUserCashBalance(withdrawDto.userId);
-      InvestmentService._checkUserCashBalance(userCashBalance);
-      const withdrawData = InvestmentService._preAddRecordToUserCashFlow(withdrawDto);
-      const { balance } = userCashBalance;
-      const amount = InvestmentService._genAmount(balance, withdrawData.deposit, withdrawData.withdraw);
-      await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
-      const newUserCashBalance = await this._preUpdateUserCashBalance(withdrawDto.userId, amount);
-      await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
-      await this._addRecordToUserCashFlow(withdrawData, sql);
+      await this.withdrawTxHandler(withdrawDto, sql);
     });
+  }
+
+  /**
+   * It's a transaction handler for user withdraw the money from the company share the profit.
+   * @param withdrawDto It's a DTO object from API request.
+   * @return - void
+   */
+  public async withdrawTxHandler(withdrawDto: WithdrawDto, sql: EntityManager): Promise<void> {
+    const userCashBalance = await this._getUserCashBalance(withdrawDto.userId);
+    InvestmentService._checkUserCashBalance(userCashBalance);
+    const withdrawData = InvestmentService._preAddRecordToUserCashFlow(withdrawDto);
+    const { balance } = userCashBalance;
+    const amount = InvestmentService._genAmount(balance, withdrawData.deposit, withdrawData.withdraw);
+    await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
+    const newUserCashBalance = await this._preUpdateUserCashBalance(withdrawDto.userId, amount);
+    await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
+    await this._addRecordToUserCashFlow(withdrawData, sql);
   }
 
   /**
@@ -359,13 +387,23 @@ export class InvestmentService {
    */
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
     await getManager().transaction(async sql => {
-      const userSharesFlowRecords = await this._getUserSharesFlowRecords(fromAt, toAt);
-      const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
-      const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
-      await InvestmentService._checkUserShares(userIds, updateUserShareRows);
-      await this._deleteUserSharesBalance(userIds, sql);
-      await this._addRecordsToUserSharesBalance(updateUserShareRows);
+      await this.settleUserSharesTxHandler(fromAt, toAt, sql);
     });
+  }
+
+  /**
+   * It's a transactin halder for settling user's investment shares.
+   * @param fromAt It's started date about settle.
+   * @param toAt It's ended date about settle.
+   * @return - void
+   */
+  public async settleUserSharesTxHandler(fromAt: string, toAt: string, sql: EntityManager): Promise<void> {
+    const userSharesFlowRecords = await this._getUserSharesFlowRecords(fromAt, toAt);
+    const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
+    const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
+    await InvestmentService._checkUserShares(userIds, updateUserShareRows);
+    await this._deleteUserSharesBalance(userIds, sql);
+    await this._addRecordsToUserSharesBalance(updateUserShareRows);
   }
 
   /**
@@ -567,12 +605,21 @@ export class InvestmentService {
    */
   public async shareProfit(payableClaimers: Map<string, BigNumber>): Promise<void> {
     await getManager().transaction(async sql => {
-      await InvestmentService._checkClaimers(payableClaimers);
-      const totalPayableProfit = InvestmentService._calculateTotalPayableAmount(payableClaimers);
-      await InvestmentService._checkIfCompanyNeedPay(totalPayableProfit);
-      await this.runUserOperation(payableClaimers, sql);
-      await this.runCompOperation(totalPayableProfit, sql);
+      await this.shareProfitTxHandler(payableClaimers, sql);
     });
+  }
+
+  /**
+   * It's a transaction handler for company sharing profit to investor.
+   * @param payableClaimers It's a list that company needs to pay.
+   * @return - void
+   */
+  public async shareProfitTxHandler(payableClaimers: Map<string, BigNumber>, sql: EntityManager): Promise<void> {
+    await InvestmentService._checkClaimers(payableClaimers);
+    const totalPayableProfit = InvestmentService._calculateTotalPayableAmount(payableClaimers);
+    await InvestmentService._checkIfCompanyNeedPay(totalPayableProfit);
+    await this.runUserOperation(payableClaimers, sql);
+    await this.runCompOperation(totalPayableProfit, sql);
   }
 
   /**
