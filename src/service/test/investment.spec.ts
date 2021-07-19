@@ -10,10 +10,11 @@ import { UserCashBalanceRepository } from '../../repository/user-cash-balance';
 import { UserCashFlowRepository } from '../../repository/user-cash-flow';
 import { UserSharesBalanceRepository } from '../../repository/user-shares-balance';
 import { UserSharesFlowRepository } from '../../repository/user-shares-flow';
-import { InvestOrDisInvestDto } from '../../dto/investment';
+import { ClaimDto, InvestOrDisInvestDto } from '../../dto/investment';
 import { UtilService } from '../../util/service';
 import { InvestmentService } from '../investment';
 import { UserSharesFlow } from '../../entity/user-shares-flow';
+import { ClaimBooking } from '../../entity/claim-booking';
 
 jest.mock('nodejs-snowflake');
 
@@ -141,5 +142,27 @@ describe('Test InvestmentService', () => {
       id: mockId
     };
     expect(await userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
+  });
+  it('claim success', async () => {
+    const userId = '1';
+    const mockClaimBookingRecords = [];
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue(mockClaimBookingRecords as unknown as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'createOrUpdate').mockResolvedValue(void 0);
+    const claimDto = new ClaimDto();
+    claimDto.userId = userId;
+    await investmentService.claim(claimDto);
+    expect(await claimBookingRepo.createOrUpdate).toBeCalledTimes(1);
+    expect(await claimBookingRepo.createOrUpdate).toBeCalledWith({ id: 'mockId', userId: '1' });
+  });
+  it('claim fails,duplicated claiming', async () => {
+    const userId = '1';
+    const mockClaimBookingRecords = [
+      { createAt: '2021-07-19 12:00:00' }
+    ];
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue(mockClaimBookingRecords as unknown as ClaimBooking[]);
+    const claimDto = new ClaimDto();
+    claimDto.userId = userId;
+    await expect(investmentService.claim(claimDto))
+      .rejects.toThrow(new Error('Cannot duplicated claim in the same season.'));
   });
 });
