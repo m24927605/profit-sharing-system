@@ -15,6 +15,9 @@ import { UtilService } from '../../util/service';
 import { InvestmentService } from '../investment';
 import { UserSharesFlow } from '../../entity/user-shares-flow';
 import { ClaimBooking } from '../../entity/claim-booking';
+import { CompanySharedProfitFlow } from '../../entity/company-shared-profit-flow';
+import { SharedProfitDto } from '../../dto/shared-profit';
+import { CompanySharedProfitBalance } from '../../entity/company-shared-profit-balance';
 
 jest.mock('nodejs-snowflake');
 
@@ -23,7 +26,7 @@ describe('Test InvestmentService', () => {
   let investmentService: InvestmentService;
   let claimBookingRepo: ClaimBookingRepository;
   let comProfitBalanceRepo: CompanyProfitBalanceRepository;
-  let comProfitBalanceFlowRepo: CompanyProfitFlowRepository;
+  let comProfitFlowRepo: CompanyProfitFlowRepository;
   let userCashBalanceRepo: UserCashBalanceRepository;
   let userCashFlowRepo: UserCashFlowRepository;
   let userSharesBalanceRepo: UserSharesBalanceRepository;
@@ -47,7 +50,7 @@ describe('Test InvestmentService', () => {
     investmentService = moduleRef.get<InvestmentService>(InvestmentService);
     claimBookingRepo = moduleRef.get<ClaimBookingRepository>(ClaimBookingRepository);
     comProfitBalanceRepo = moduleRef.get<CompanyProfitBalanceRepository>(CompanyProfitBalanceRepository);
-    comProfitBalanceFlowRepo = moduleRef.get<CompanyProfitFlowRepository>(CompanyProfitFlowRepository);
+    comProfitFlowRepo = moduleRef.get<CompanyProfitFlowRepository>(CompanyProfitFlowRepository);
     userCashBalanceRepo = moduleRef.get<UserCashBalanceRepository>(UserCashBalanceRepository);
     userCashFlowRepo = moduleRef.get<UserCashFlowRepository>(UserCashFlowRepository);
     userSharesBalanceRepo = moduleRef.get<UserSharesBalanceRepository>(UserSharesBalanceRepository);
@@ -69,7 +72,7 @@ describe('Test InvestmentService', () => {
     investDto.amount = amount;
     jest.spyOn(userSharesFlowRepo, 'create').mockResolvedValue(void 0);
     await investmentService.invest(investDto);
-    expect(await userSharesFlowRepo.create).toBeCalledTimes(1);
+    expect(userSharesFlowRepo.create).toBeCalledTimes(1);
     const mockUserShareFlow = {
       userId: userId,
       invest: amount,
@@ -101,14 +104,14 @@ describe('Test InvestmentService', () => {
     ];
     jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue(mockUserSharesFlowRecords as UserSharesFlow[]);
     await investmentService.disinvestTxHandler(disinvestDto, undefined);
-    expect(await userSharesFlowRepo.create).toBeCalledTimes(1);
+    expect(userSharesFlowRepo.create).toBeCalledTimes(1);
     const mockUserShareFlow = {
       userId: userId,
       invest: '0',
       disinvest: amount,
       id: mockId
     };
-    expect(await userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
+    expect(userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
   });
   it('disinvest fails,net shares balance should be positive', async () => {
     const userId = '1';
@@ -134,14 +137,14 @@ describe('Test InvestmentService', () => {
     jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue(mockUserSharesFlowRecords as UserSharesFlow[]);
     await expect(investmentService.disinvestTxHandler(disinvestDto, undefined))
       .rejects.toThrow(new Error('User net shares cannot be less than 0'));
-    expect(await userSharesFlowRepo.create).toBeCalledTimes(1);
+    expect(userSharesFlowRepo.create).toBeCalledTimes(1);
     const mockUserShareFlow = {
       userId: userId,
       invest: '0',
       disinvest: amount,
       id: mockId
     };
-    expect(await userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
+    expect(userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
   });
   it('claim success', async () => {
     const userId = '1';
@@ -151,8 +154,8 @@ describe('Test InvestmentService', () => {
     const claimDto = new ClaimDto();
     claimDto.userId = userId;
     await investmentService.claim(claimDto);
-    expect(await claimBookingRepo.createOrUpdate).toBeCalledTimes(1);
-    expect(await claimBookingRepo.createOrUpdate).toBeCalledWith({ id: 'mockId', userId: '1' });
+    expect(claimBookingRepo.createOrUpdate).toBeCalledTimes(1);
+    expect(claimBookingRepo.createOrUpdate).toBeCalledWith({ id: 'mockId', userId: '1' });
   });
   it('claim fails,duplicated claiming', async () => {
     const userId = '1';
@@ -164,5 +167,22 @@ describe('Test InvestmentService', () => {
     claimDto.userId = userId;
     await expect(investmentService.claim(claimDto))
       .rejects.toThrow(new Error('Cannot duplicated claim in the same season.'));
+  });
+  it('company add profit success', async () => {
+    const sharedProfitDto = new SharedProfitDto();
+    sharedProfitDto.income = '100';
+    sharedProfitDto.outcome = '0';
+    jest.spyOn(comProfitFlowRepo, 'create').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'createOrUpdate').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as unknown as CompanySharedProfitBalance);
+    await investmentService.addProfitTxHandler(sharedProfitDto, undefined);
+    expect(comProfitFlowRepo.create).toBeCalledTimes(1);
+    const comSharedProfitFlow = new CompanySharedProfitFlow();
+    comSharedProfitFlow.income = 100;
+    comSharedProfitFlow.outcome = 0;
+    expect(comProfitFlowRepo.create).toBeCalledWith(comSharedProfitFlow, undefined);
+    const mockComProfitBalance = { id: 1, balance: 100 };
+    expect(comProfitBalanceRepo.createOrUpdate).toBeCalledTimes(1);
+    expect(comProfitBalanceRepo.createOrUpdate).toBeCalledWith(mockComProfitBalance, undefined);
   });
 });
