@@ -2,7 +2,11 @@ import { EntityManager, getRepository } from 'typeorm';
 import { UserSharesBalance } from '../entity/user-shares-balance';
 
 export class UserSharesBalanceRepository {
-  public async create(userSharesBalanceRows: UserSharesBalance[]): Promise<void> {
+  public async create(userSharesBalanceRows: UserSharesBalance[], sql: EntityManager): Promise<void> {
+    if (sql) {
+      await sql.getRepository(UserSharesBalance).insert(userSharesBalanceRows);
+      return;
+    }
     await getRepository(UserSharesBalance).insert(userSharesBalanceRows);
   }
 
@@ -10,7 +14,11 @@ export class UserSharesBalanceRepository {
     return await getRepository(UserSharesBalance).findByIds(ids);
   }
 
-  public async delete(ids: string[],sql:EntityManager) {
-    await sql.getRepository(UserSharesBalance).delete(ids);
+  public async delete(ids: string[], sql: EntityManager) {
+    if (sql) {
+      await sql.getRepository(UserSharesBalance).delete(ids);
+      return;
+    }
+    await getRepository(UserSharesBalance).delete(ids);
   }
 }
