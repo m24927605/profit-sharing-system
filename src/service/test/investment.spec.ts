@@ -305,6 +305,30 @@ describe('Test InvestmentService', () => {
     expect(userSharesBalanceRepo.delete).toBeCalledWith([userId], undefined);
     expect(userSharesBalanceRepo.create).toBeCalledTimes(1);
   });
+  it('settle user shares success with many records', async () => {
+    const userId = '1';
+    const fromAt = '2020-07-20 00:00:00';
+    const toAt = '2020-07-20 23:59:59';
+    jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        invest: '100',
+        disinvest: '0'
+      },
+      {
+        userId,
+        invest: '100',
+        disinvest: '0'
+      }
+    ] as UserSharesFlow[]);
+    jest.spyOn(userSharesBalanceRepo, 'delete').mockResolvedValue(void 0);
+    jest.spyOn(userSharesBalanceRepo, 'create').mockResolvedValue(void 0);
+    await investmentService.settleUserSharesTxHandler(fromAt, toAt, undefined);
+    expect(userSharesFlowRepo.list).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.delete).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.delete).toBeCalledWith([userId], undefined);
+    expect(userSharesBalanceRepo.create).toBeCalledTimes(1);
+  });
   it('settle user shares fails,no need to share profit', async () => {
     jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue([] as UserSharesFlow[]);
     jest.spyOn(userSharesBalanceRepo, 'delete').mockResolvedValue(void 0);

@@ -386,7 +386,7 @@ export class InvestmentService {
   public async settleUserSharesTxHandler(fromAt: string, toAt: string, sql: EntityManager): Promise<void> {
     const userSharesFlowRecords = await this._getUserSharesFlowRecords(fromAt, toAt);
     const { totalShares, userSharesMap } = InvestmentService._calculateUserShares(userSharesFlowRecords);
-    const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
+    const { userIds, updateUserShareRows } = InvestmentService._preUpdateUserShares(totalShares, userSharesMap);
     await InvestmentService._checkUserShares(userIds, updateUserShareRows);
     await this._deleteUserSharesBalance(userIds, sql);
     await this._addRecordsToUserSharesBalance(updateUserShareRows, sql);
@@ -416,13 +416,17 @@ export class InvestmentService {
   private static _calculateUserShares(userSharesRecords: UserSharesFlow[])
     : { totalShares: number, userSharesMap: Map<string, BigNumber> } {
     const userSharesMap = new Map<string, BigNumber>();
-    let totalShares = new BigNumber(0).toNumber();
+    let totalShares = 0;
     for (const { userId, invest, disinvest } of userSharesRecords) {
-      userSharesMap[userId] = userSharesMap[userId] ?? 0;
-      const investAmount = new BigNumber(invest);
-      const disinvestAmount = new BigNumber(disinvest);
-      userSharesMap[userId] = MathService.plus(userSharesMap[userId], investAmount).minus(disinvestAmount);
-      totalShares = MathService.plus(totalShares, investAmount).minus(disinvestAmount).toNumber();
+      if (!userSharesMap.has(userId)) {
+        userSharesMap.set(userId, new BigNumber(0));
+      }
+      const investAmount = new BigNumber(invest).toNumber();
+      const disinvestAmount = new BigNumber(disinvest).toNumber();
+      const netShares = MathService.minus(investAmount, disinvestAmount).toNumber();
+      const userShares = userSharesMap.get(userId).plus(netShares).toNumber();
+      totalShares += netShares;
+      userSharesMap.set(userId, new BigNumber(userShares));
     }
     return { totalShares, userSharesMap };
   }
@@ -433,12 +437,11 @@ export class InvestmentService {
    * @param userSharesMap It's a map that store every user's shares.
    * @return - { userIds, updateUserShareRows }
    */
-  private static preUpdateUserShares(totalShares: number, userSharesMap: Map<string, BigNumber>)
+  private static _preUpdateUserShares(totalShares: number, userSharesMap: Map<string, BigNumber>)
     : { userIds: string[], updateUserShareRows: UserSharesBalance[] } {
     const updateUserShareRows = [];
     const userIds = [];
-    // Notice: DO NOT use Map.entries() that will return empty array
-    for (const [userId, balance] of Object.entries(userSharesMap)) {
+    for (const [userId, balance] of userSharesMap.entries()) {
       const userSharesBalance = new UserSharesBalance();
       userSharesBalance.userId = userId;
       userSharesBalance.balance = balance.toString();
@@ -457,7 +460,7 @@ export class InvestmentService {
    * @return - number
    */
   private static _calculateProportion(balance: BigNumber, totalShares: number): number {
-    return (balance.toNumber()) ? new BigNumber(balance.dividedBy(totalShares).times(100)).toNumber() : 0;
+    return new BigNumber(balance.dividedBy(totalShares).times(100)).toNumber();
   }
 
   /**
