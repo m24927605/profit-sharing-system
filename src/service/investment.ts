@@ -1,19 +1,10 @@
 import BigNumber from 'bignumber.js';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
-import {
-  EntityManager,
-  getManager,
-  Raw
-} from 'typeorm';
+import { EntityManager, getManager, Raw } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 
-import {
-  ClaimDto,
-  InvestOrDisInvestDto,
-  UserShares,
-  WithdrawDto
-} from '../dto/investment';
+import { ClaimDto, InvestOrDisInvestDto, UserShares, WithdrawDto } from '../dto/investment';
 import { SharedProfit, SharedProfitDto } from '../dto/shared-profit';
 import { ClaimBooking } from '../entity/claim-booking';
 import { UserCashBalance } from '../entity/user-cash-balance';
@@ -28,10 +19,7 @@ import { CompanySharedProfitBalance as ComProfitBalance } from '../entity/compan
 import { ClaimState } from '../util/state';
 import { MathService } from '../util/tool';
 import { UtilService } from '../util/service';
-import {
-  Amount,
-  TimeService
-} from './base';
+import { Amount, TimeService } from './base';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ClaimBookingRepository } from '../repository/claim-booking';
 import { CompanyProfitBalanceRepository } from '../repository/company-shared-profit-balance';
@@ -273,11 +261,11 @@ export class InvestmentService {
    */
   private static _checkClaimRecordNotDuplicated(claimBookingRecords: ClaimBooking[]): void {
     const nowDate = new Date();
-    for (const { createdAt } of claimBookingRecords) {
+    for (const { createdAt, status } of claimBookingRecords) {
       const season = TimeService.getSeason(createdAt);
       const seasonDateRange = TimeService.getSeasonDateRange(dayjs(createdAt).toDate());
       const { fromAt, toAt } = seasonDateRange.get(season);
-      if (TimeService.isInTimePeriod(nowDate, fromAt, toAt)) {
+      if (TimeService.isInTimePeriod(nowDate, fromAt, toAt) && status === ClaimState.INIT) {
         throw new Error('Cannot duplicated claim in the same season.');
       }
     }

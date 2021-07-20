@@ -151,7 +151,18 @@ describe('Test InvestmentService', () => {
     };
     expect(userSharesFlowRepo.create).toBeCalledWith(mockUserShareFlow, undefined);
   });
-  it('claim success', async () => {
+  it('claim success but has old record', async () => {
+    const userId = '1';
+    const mockClaimBookingRecords = [{ createAt: '2020-07-19 12:00:00', status: ClaimState.EXPIRED }];
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue(mockClaimBookingRecords as unknown as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'createOrUpdate').mockResolvedValue(void 0);
+    const claimDto = new ClaimDto();
+    claimDto.userId = userId;
+    await investmentService.claim(claimDto);
+    expect(claimBookingRepo.createOrUpdate).toBeCalledTimes(1);
+    expect(claimBookingRepo.createOrUpdate).toBeCalledWith({ id: 'mockId', userId: '1' });
+  });
+  it('claim success but no record in claim booking table', async () => {
     const userId = '1';
     const mockClaimBookingRecords = [];
     jest.spyOn(claimBookingRepo, 'list').mockResolvedValue(mockClaimBookingRecords as unknown as ClaimBooking[]);
@@ -165,7 +176,7 @@ describe('Test InvestmentService', () => {
   it('claim fails,duplicated claiming', async () => {
     const userId = '1';
     const mockClaimBookingRecords = [
-      { createAt: '2021-07-19 12:00:00' }
+      { createAt: '2021-07-19 12:00:00', status: ClaimState.INIT }
     ];
     jest.spyOn(claimBookingRepo, 'list').mockResolvedValue(mockClaimBookingRecords as unknown as ClaimBooking[]);
     const claimDto = new ClaimDto();
