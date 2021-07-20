@@ -723,7 +723,7 @@ export class InvestmentService {
       if (!userCashBalance) {
         userCashBalance = await this.initializeUserCashBalance(userId);
       }
-      const initBalanceAmount = (userCashBalance) ? userCashBalance.balance : 0;
+      const initBalanceAmount = userCashBalance.balance;
       const depositAmount = payableAmount.toNumber();
       const withdrawAmount = 0;
       const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
