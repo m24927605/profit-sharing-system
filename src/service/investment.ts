@@ -306,7 +306,7 @@ export class InvestmentService {
     const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
     amount.calculateBalanceAmount();
     await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
-    const newUserCashBalance = await this._preUpdateUserCashBalance(amount, userCashBalance);
+    const newUserCashBalance = await InvestmentService._preUpdateUserCashBalance(amount, userCashBalance);
     await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
     await this._addRecordToUserCashFlow(withdrawData, sql);
   }
@@ -630,8 +630,8 @@ export class InvestmentService {
    * @return - void
    */
   private async runUserOperation(payableClaimers: Map<string, BigNumber>, sql: EntityManager): Promise<void> {
-    await this._updatePayableUserCashFlow(payableClaimers, sql);
-    await this._updatePayableUserCashBalance(payableClaimers);
+    await this.distributeProfit(payableClaimers, sql);
+    await this._updatePayableClaimerCashBalance(payableClaimers);
   }
 
   /**
@@ -674,12 +674,12 @@ export class InvestmentService {
   }
 
   /**
-   * Update user's cash flow if the user is available to gain the shared profit.
+   * Add record to user's cash flow if the user is available to gain the shared profit.
    * @param profitClaimers It's a list that company needs to pay.
    * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _updatePayableUserCashFlow(profitClaimers: Map<string, BigNumber>, sql: EntityManager) {
+  private async distributeProfit(profitClaimers: Map<string, BigNumber>, sql: EntityManager) {
     for (const [userId, payableAmount] of profitClaimers.entries()) {
       await this._allocateFunds(userId, payableAmount.toNumber(), sql);
     }
@@ -716,18 +716,20 @@ export class InvestmentService {
    * @param profitClaimers It's the amount company needs to pay.
    * @return - void
    */
-  private async _updatePayableUserCashBalance(profitClaimers: Map<string, BigNumber>)
+  private async _updatePayableClaimerCashBalance(profitClaimers: Map<string, BigNumber>)
     : Promise<void> {
     for (const [userId, payableAmount] of profitClaimers.entries()) {
       const condition = { userId };
-      const userCashBalance = await this._userCashBalanceRepo.getOne(condition);
-      await this.initializeUserCashBalance(userId, userCashBalance);
+      let userCashBalance = await this._userCashBalanceRepo.getOne(condition);
+      if (!userCashBalance) {
+        userCashBalance = await this.initializeUserCashBalance(userId);
+      }
       const initBalanceAmount = (userCashBalance) ? userCashBalance.balance : 0;
       const depositAmount = payableAmount.toNumber();
       const withdrawAmount = 0;
       const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
       amount.calculateBalanceAmount();
-      const updateCashBalance = await this._preUpdateUserCashBalance(amount, userCashBalance);
+      const updateCashBalance = await InvestmentService._preUpdateUserCashBalance(amount, userCashBalance);
       await this._userCashBalanceRepo.update(condition, updateCashBalance);
       await this._setFinishToQualifiedClaimer(userId);
     }
@@ -736,26 +738,23 @@ export class InvestmentService {
   /**
    * Initialize user's balance amount in user_cash_balance table if the record is not exists.
    * @param userId It's the id of the user.
-   * @param balance It's balance amount of the user in user_cash_balance table.
    * @return - void
    */
-  private async initializeUserCashBalance(userId: string, balance: UserCashBalance) {
-    if (balance) {
-      return;
-    }
+  private async initializeUserCashBalance(userId: string) {
     const userCashBalance = new UserCashBalance();
     userCashBalance.userId = userId;
     userCashBalance.balance = 0;
     await this._userCashBalanceRepo.create(userCashBalance);
+    return userCashBalance;
   }
 
   /**
    * Prepare the payload before updating the user_cash_balance table.
-   * @param userId It's the id of the user.
    * @param amount It's a instance from Amount class.
+   * @param userCashBalanceRecord It's a record about user cash balance.
    * @return UserCashBalance
    */
-  private async _preUpdateUserCashBalance(amount: Amount, userCashBalanceRecord: UserCashBalance)
+  private static async _preUpdateUserCashBalance(amount: Amount, userCashBalanceRecord: UserCashBalance)
     : Promise<UserCashBalance> {
     amount.calculateBalanceAmount();
     userCashBalanceRecord.balance = amount.balanceAmount;
