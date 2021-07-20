@@ -327,7 +327,7 @@ export class InvestmentService {
    * @return - void
    */
   private static _checkUserCashBalance(userCashBalance: UserCashBalance): void {
-    if (!userCashBalance) {
+    if (!userCashBalance || userCashBalance.balance === 0) {
       throw  new Error('The balance of the user is 0.');
     }
   }
