@@ -406,7 +406,7 @@ export class InvestmentService {
     const { userIds, updateUserShareRows } = InvestmentService.preUpdateUserShares(totalShares, userSharesMap);
     await InvestmentService._checkUserShares(userIds, updateUserShareRows);
     await this._deleteUserSharesBalance(userIds, sql);
-    await this._addRecordsToUserSharesBalance(updateUserShareRows);
+    await this._addRecordsToUserSharesBalance(updateUserShareRows, sql);
   }
 
   /**
@@ -502,10 +502,11 @@ export class InvestmentService {
   /**
    * Add records in user_shares_balance table.
    * @param userSharesBalanceRows It's a list that wants to update in user_shares_balance table.
+   * @param sql It's a EntityManager for doing transaction.
    * @return - void
    */
-  private async _addRecordsToUserSharesBalance(userSharesBalanceRows: UserSharesBalance[]) {
-    await this._userSharesBalanceRepo.create(userSharesBalanceRows);
+  private async _addRecordsToUserSharesBalance(userSharesBalanceRows: UserSharesBalance[], sql: EntityManager) {
+    await this._userSharesBalanceRepo.create(userSharesBalanceRows, sql);
   }
 
   /**
