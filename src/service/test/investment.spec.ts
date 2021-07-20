@@ -219,20 +219,6 @@ describe('Test InvestmentService', () => {
     expect(claimBookingRepo.list).toBeCalledTimes(1);
     expect(claimBookingRepo.update).toBeCalledTimes(1);
   });
-  it('set unqualified claimer expired', async () => {
-    const userId = '1';
-    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
-      {
-        userId,
-        createdAt: new Date('2020-01-01'),
-        status: ClaimState.INIT
-      }
-    ] as ClaimBooking[]);
-    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
-    await investmentService.setUnQualifiedClaimersExpired();
-    expect(claimBookingRepo.list).toBeCalledTimes(1);
-    expect(claimBookingRepo.update).toBeCalledTimes(1);
-  });
   it('settle user shares', async () => {
     const userId = '1';
     jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue([
@@ -283,11 +269,19 @@ describe('Test InvestmentService', () => {
     expect(userCashBalanceRepo.updateForWithdraw).toBeCalledTimes(1);
     expect(userCashFlowRepo.create).toBeCalledTimes(1);
   });
-  it('user withdraw fails,withdraw amount is more than balance amount', async () => {
+  it('user withdraw fails,user balance is 0', async () => {
     const withdrawDto = new WithdrawDto();
     withdrawDto.userId = '1';
     withdrawDto.amount = '100';
     jest.spyOn(userCashBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as UserCashBalance);
+    await expect(investmentService.withdrawTxHandler(withdrawDto, undefined))
+      .rejects.toThrow(new Error('The balance of the user is 0.'));
+  });
+  it('user withdraw fails,withdraw amount is more than balance amount', async () => {
+    const withdrawDto = new WithdrawDto();
+    withdrawDto.userId = '1';
+    withdrawDto.amount = '100';
+    jest.spyOn(userCashBalanceRepo, 'getOne').mockResolvedValue({ balance: 1 } as UserCashBalance);
     jest.spyOn(userCashBalanceRepo, 'updateForWithdraw').mockResolvedValue(void 0);
     jest.spyOn(userCashFlowRepo, 'create').mockResolvedValue(void 0);
     await expect(investmentService.withdrawTxHandler(withdrawDto, undefined))
