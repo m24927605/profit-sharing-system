@@ -3,7 +3,6 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   EntityManager,
-  getConnection,
   getManager,
   Raw
 } from 'typeorm';
@@ -534,23 +533,23 @@ export class InvestmentService {
   }
 
   /**
-   * Set not qualified claimer's status to expired.
+   * Set unqualified claimer's status to expired.
    * @return - void
    */
-  public async setNotQualifiedClaimersExpired(): Promise<void> {
+  public async setUnQualifiedClaimersExpired(): Promise<void> {
     const claimBookingRecords = await this._claimBookingRepo.list({ status: ClaimState.INIT });
-    await this._setNotQualifiedClaimersExpired(claimBookingRecords);
+    await this._setUnQualifiedClaimersExpired(claimBookingRecords);
   }
 
   /**
-   * Set not qualified claimer's status to expired.
+   * Set unqualified claimer's status to expired.
    * @return - void
    */
-  private async _setNotQualifiedClaimersExpired(claimBookingRecords: ClaimBooking[]): Promise<void> {
+  private async _setUnQualifiedClaimersExpired(claimBookingRecords: ClaimBooking[]): Promise<void> {
     for (const record of claimBookingRecords) {
       const isClaimDateInPeriod = this._isClaimDateAvailable(record.createdAt);
       if (!isClaimDateInPeriod && record.status === ClaimState.INIT) {
-        await InvestmentService._setExpiredInClaimBooking(record.id);
+        await this._setExpiredInClaimBooking(record);
       }
     }
   }
@@ -571,16 +570,14 @@ export class InvestmentService {
 
   /**
    * Set claimer's status to expired.
-   * @param id It's a record id.
+   * @param claimBooking It's a record about claim booking.
    * @return - void
    */
-  private static async _setExpiredInClaimBooking(id: string): Promise<void> {
-    await getConnection()
-      .createQueryBuilder()
-      .update(ClaimBooking)
-      .set({ status: ClaimState.EXPIRED })
-      .where({ id })
-      .execute();
+  private async _setExpiredInClaimBooking(claimBooking: ClaimBooking): Promise<void> {
+    const { id } = claimBooking;
+    claimBooking.status = ClaimState.EXPIRED;
+    claimBooking.updatedAt = new Date();
+    await this._claimBookingRepo.update({ id }, claimBooking);
   }
 
   /**
