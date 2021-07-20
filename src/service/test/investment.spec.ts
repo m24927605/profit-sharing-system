@@ -359,6 +359,24 @@ describe('Test InvestmentService', () => {
     expect(comProfitFlowRepo.create).toBeCalledTimes(1);
     expect(comProfitBalanceRepo.updateOutcome).toBeCalledTimes(1);
   });
+  it('share profit success but has a record in user cash balance table', async () => {
+    const userId = '1';
+    const payableClaimers = new Map([[userId, new BigNumber(100)]]);
+    jest.spyOn(userCashFlowRepo, 'create').mockResolvedValue(void 0);
+    jest.spyOn(comProfitFlowRepo, 'create').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'updateOutcome').mockResolvedValue(void 0);
+    jest.spyOn(userCashBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as UserCashBalance);
+    jest.spyOn(userCashBalanceRepo, 'create').mockResolvedValue(void 0);
+    jest.spyOn(userCashBalanceRepo, 'update').mockResolvedValue(void 0);
+    jest.spyOn(claimBookingRepo, 'getOne').mockResolvedValue({ status: ClaimState.INIT } as ClaimBooking);
+    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ id: 1, balance: 100 } as CompanySharedProfitBalance);
+    await investmentService.shareProfitTxHandler(payableClaimers, undefined);
+    expect(userCashBalanceRepo.create).toBeCalledTimes(0);
+    expect(userCashFlowRepo.create).toBeCalledTimes(1);
+    expect(comProfitFlowRepo.create).toBeCalledTimes(1);
+    expect(comProfitBalanceRepo.updateOutcome).toBeCalledTimes(1);
+  });
   it('share profit but no payable claimers', async () => {
     const payableClaimers = new Map();
     await expect(investmentService.shareProfitTxHandler(payableClaimers, undefined))
