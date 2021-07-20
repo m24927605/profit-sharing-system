@@ -30,7 +30,7 @@ export class CronTaskService {
       // get qualified claimer
       const shareProfitClaimerIds = await this._investmentService.getQualifiedClaimers();
       // set not qualified claimer expired
-      await this._investmentService.setNotQualifiedClaimersExpired();
+      await this._investmentService.setUnQualifiedClaimersExpired();
       // get payable claimer list
       claimers = await this._investmentService.getPayableClaimers(shareProfitClaimerIds);
     }
