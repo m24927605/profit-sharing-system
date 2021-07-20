@@ -20,6 +20,7 @@ import { SharedProfitDto } from '../../dto/shared-profit';
 import { CompanySharedProfitBalance } from '../../entity/company-shared-profit-balance';
 import { ClaimState } from '../../util/state';
 import { UserCashBalance } from '../../entity/user-cash-balance';
+import { UserSharesBalance } from '../../entity/user-shares-balance';
 
 jest.mock('nodejs-snowflake');
 process.env.MAX_CLAIM_SEASON = '1';
@@ -293,5 +294,29 @@ describe('Test InvestmentService', () => {
     expect(userCashBalanceRepo.getOne).toBeCalledTimes(1);
     expect(userCashBalanceRepo.updateForWithdraw).toBeCalledTimes(0);
     expect(userCashFlowRepo.create).toBeCalledTimes(0);
+  });
+  it('get payable claimers success', async () => {
+    const userId = '1';
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ balance: 100 } as CompanySharedProfitBalance);
+    jest.spyOn(userSharesBalanceRepo, 'listByIds').mockResolvedValue([
+      {
+        userId,
+        proportion: 100
+      }
+    ] as UserSharesBalance[]);
+    const payableClaimers = await investmentService.getPayableClaimers([userId]);
+    expect(payableClaimers.has(userId));
+    expect(payableClaimers.get(userId).toNumber()).toEqual(100);
+    expect(comProfitBalanceRepo.getOne).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.listByIds).toBeCalledTimes(1);
+  });
+  it('get payable claimers success but return empty map', async () => {
+    const userId = '1';
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ balance: 100 } as CompanySharedProfitBalance);
+    jest.spyOn(userSharesBalanceRepo, 'listByIds').mockResolvedValue([] as UserSharesBalance[]);
+    const payableClaimers = await investmentService.getPayableClaimers([]);
+    expect(payableClaimers.has(userId)).toBeFalsy();
+    expect(comProfitBalanceRepo.getOne).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.listByIds).toBeCalledTimes(1);
   });
 });
