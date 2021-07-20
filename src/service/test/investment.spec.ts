@@ -18,8 +18,10 @@ import { ClaimBooking } from '../../entity/claim-booking';
 import { CompanySharedProfitFlow } from '../../entity/company-shared-profit-flow';
 import { SharedProfitDto } from '../../dto/shared-profit';
 import { CompanySharedProfitBalance } from '../../entity/company-shared-profit-balance';
+import { ClaimState } from '../../util/state';
 
 jest.mock('nodejs-snowflake');
+process.env.MAX_CLAIM_SEASON = '1';
 
 describe('Test InvestmentService', () => {
   const mockId = 'mockId';
@@ -184,5 +186,59 @@ describe('Test InvestmentService', () => {
     const mockComProfitBalance = { id: 1, balance: 100 };
     expect(comProfitBalanceRepo.createOrUpdate).toBeCalledTimes(1);
     expect(comProfitBalanceRepo.createOrUpdate).toBeCalledWith(mockComProfitBalance, undefined);
+  });
+  it('user claim success', async () => {
+    const userId = '1';
+    const fromAt = '2020-07-20 00:00:00';
+    const toAt = '2020-07-20 23:59:59';
+    jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        invest: '100',
+        disinvest: '0'
+      }
+    ] as UserSharesFlow[]);
+    jest.spyOn(userSharesBalanceRepo, 'delete').mockResolvedValue(void 0);
+    jest.spyOn(userSharesBalanceRepo, 'create').mockResolvedValue(void 0);
+    await investmentService.settleUserSharesTxHandler(fromAt, toAt, undefined);
+    expect(userSharesFlowRepo.list).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.delete).toBeCalledTimes(1);
+    expect(userSharesBalanceRepo.delete).toBeCalledWith([userId], undefined);
+    expect(userSharesBalanceRepo.create).toBeCalledTimes(1);
+  });
+  it('user claim fails,no need to share profit', async () => {
+    jest.spyOn(userSharesFlowRepo, 'list').mockResolvedValue([] as UserSharesFlow[]);
+    jest.spyOn(userSharesBalanceRepo, 'delete').mockResolvedValue(void 0);
+    jest.spyOn(userSharesBalanceRepo, 'create').mockResolvedValue(void 0);
+    await expect(investmentService.settleUserSharesTxHandler('2020-07-20 00:00:00', '2020-07-20 23:59:59', undefined))
+      .rejects.toThrow(new Error('No need to share profit.'));
+  });
+  it('get unqualified claimer success', async () => {
+    const userId = '1';
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        createdAt: new Date(),
+        status: ClaimState.INIT
+      }
+    ] as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
+    const qualifiedClaimers = await investmentService.getQualifiedClaimers();
+    expect(claimBookingRepo.list).toBeCalledTimes(1);
+    expect(qualifiedClaimers).toEqual([userId]);
+  });
+  it('set unqualified claimer expired', async () => {
+    const userId = '1';
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        createdAt: new Date('2020-01-01'),
+        status: ClaimState.INIT
+      }
+    ] as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
+    await investmentService.setUnQualifiedClaimersExpired();
+    expect(claimBookingRepo.list).toBeCalledTimes(1);
+    expect(claimBookingRepo.update).toBeCalledTimes(1);
   });
 });
