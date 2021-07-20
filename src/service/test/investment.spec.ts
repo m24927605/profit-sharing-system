@@ -232,6 +232,20 @@ describe('Test InvestmentService', () => {
     expect(claimBookingRepo.list).toBeCalledTimes(1);
     expect(qualifiedClaimers).toEqual([userId]);
   });
+  it('get empty unqualified claimer', async () => {
+    const userId = '1';
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        createdAt: new Date(),
+        status: ClaimState.EXPIRED
+      }
+    ] as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
+    const qualifiedClaimers = await investmentService.getQualifiedClaimers();
+    expect(claimBookingRepo.list).toBeCalledTimes(1);
+    expect(qualifiedClaimers).toEqual([]);
+  });
   it('set unqualified claimer expired', async () => {
     const userId = '1';
     jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
@@ -245,6 +259,20 @@ describe('Test InvestmentService', () => {
     await investmentService.setUnQualifiedClaimersExpired();
     expect(claimBookingRepo.list).toBeCalledTimes(1);
     expect(claimBookingRepo.update).toBeCalledTimes(1);
+  });
+  it('not set unqualified claimer expired,status is not 0', async () => {
+    const userId = '1';
+    jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([
+      {
+        userId,
+        createdAt: new Date('2020-01-01'),
+        status: ClaimState.EXPIRED
+      }
+    ] as ClaimBooking[]);
+    jest.spyOn(claimBookingRepo, 'update').mockResolvedValue(void 0);
+    await investmentService.setUnQualifiedClaimersExpired();
+    expect(claimBookingRepo.list).toBeCalledTimes(1);
+    expect(claimBookingRepo.update).toBeCalledTimes(0);
   });
   it('settle user shares', async () => {
     const userId = '1';
