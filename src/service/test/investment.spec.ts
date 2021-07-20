@@ -10,7 +10,7 @@ import { UserCashBalanceRepository } from '../../repository/user-cash-balance';
 import { UserCashFlowRepository } from '../../repository/user-cash-flow';
 import { UserSharesBalanceRepository } from '../../repository/user-shares-balance';
 import { UserSharesFlowRepository } from '../../repository/user-shares-flow';
-import { ClaimDto, InvestOrDisInvestDto } from '../../dto/investment';
+import { ClaimDto, InvestOrDisInvestDto, WithdrawDto } from '../../dto/investment';
 import { UtilService } from '../../util/service';
 import { InvestmentService } from '../investment';
 import { UserSharesFlow } from '../../entity/user-shares-flow';
@@ -19,6 +19,7 @@ import { CompanySharedProfitFlow } from '../../entity/company-shared-profit-flow
 import { SharedProfitDto } from '../../dto/shared-profit';
 import { CompanySharedProfitBalance } from '../../entity/company-shared-profit-balance';
 import { ClaimState } from '../../util/state';
+import { UserCashBalance } from '../../entity/user-cash-balance';
 
 jest.mock('nodejs-snowflake');
 process.env.MAX_CLAIM_SEASON = '1';
@@ -267,5 +268,30 @@ describe('Test InvestmentService', () => {
     jest.spyOn(userSharesBalanceRepo, 'create').mockResolvedValue(void 0);
     await expect(investmentService.settleUserSharesTxHandler('2020-07-20 00:00:00', '2020-07-20 23:59:59', undefined))
       .rejects.toThrow(new Error('No need to share profit.'));
+  });
+  it('user withdraw success', async () => {
+    const withdrawDto = new WithdrawDto();
+    withdrawDto.userId = '1';
+    withdrawDto.amount = '100';
+    jest.spyOn(userCashBalanceRepo, 'getOne').mockResolvedValue({ balance: 100 } as UserCashBalance);
+    jest.spyOn(userCashBalanceRepo, 'updateForWithdraw').mockResolvedValue(void 0);
+    jest.spyOn(userCashFlowRepo, 'create').mockResolvedValue(void 0);
+    await investmentService.withdrawTxHandler(withdrawDto, undefined);
+    expect(userCashBalanceRepo.getOne).toBeCalledTimes(1);
+    expect(userCashBalanceRepo.updateForWithdraw).toBeCalledTimes(1);
+    expect(userCashFlowRepo.create).toBeCalledTimes(1);
+  });
+  it('user withdraw fails,withdraw amount is more than balance amount', async () => {
+    const withdrawDto = new WithdrawDto();
+    withdrawDto.userId = '1';
+    withdrawDto.amount = '100';
+    jest.spyOn(userCashBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as UserCashBalance);
+    jest.spyOn(userCashBalanceRepo, 'updateForWithdraw').mockResolvedValue(void 0);
+    jest.spyOn(userCashFlowRepo, 'create').mockResolvedValue(void 0);
+    await expect(investmentService.withdrawTxHandler(withdrawDto, undefined))
+      .rejects.toThrow(new Error('Withdraw amount must less than balance.'));
+    expect(userCashBalanceRepo.getOne).toBeCalledTimes(1);
+    expect(userCashBalanceRepo.updateForWithdraw).toBeCalledTimes(0);
+    expect(userCashFlowRepo.create).toBeCalledTimes(0);
   });
 });

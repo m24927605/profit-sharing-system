@@ -300,10 +300,13 @@ export class InvestmentService {
     const userCashBalance = await this._getUserCashBalance(withdrawDto.userId);
     InvestmentService._checkUserCashBalance(userCashBalance);
     const withdrawData = InvestmentService._preAddRecordToUserCashFlow(withdrawDto);
-    const { balance } = userCashBalance;
-    const amount = InvestmentService._genAmount(balance, withdrawData.deposit, withdrawData.withdraw);
+    const initBalanceAmount = userCashBalance.balance;
+    const depositAmount = withdrawData.deposit;
+    const withdrawAmount = withdrawData.withdraw;
+    const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
+    amount.calculateBalanceAmount();
     await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
-    const newUserCashBalance = await this._preUpdateUserCashBalance(withdrawDto.userId, amount);
+    const newUserCashBalance = await this._preUpdateUserCashBalance(amount, userCashBalance);
     await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
     await this._addRecordToUserCashFlow(withdrawData, sql);
   }
@@ -352,21 +355,6 @@ export class InvestmentService {
     withDraw.withdraw = new BigNumber(withdrawDto.amount).toNumber();
     withDraw.deposit = new BigNumber(0).toNumber();
     return withDraw;
-  }
-
-  /**
-   * Get an instance of Amount class.
-   * @param balanceAmount It's a balance amount.
-   * @param depositAmount It's a deposit amount.
-   * @param withdrawAmount It's a withdraw amount.
-   * @return Amount It's an instance of Amount class.
-   */
-  private static _genAmount(balanceAmount: number, depositAmount: number, withdrawAmount): Amount {
-    const amount = new Amount();
-    amount.initBalanceAmount = balanceAmount;
-    amount.depositAmount = depositAmount;
-    amount.withdrawAmount = withdrawAmount;
-    return amount;
   }
 
   /**
@@ -734,10 +722,12 @@ export class InvestmentService {
       const condition = { userId };
       const userCashBalance = await this._userCashBalanceRepo.getOne(condition);
       await this.initializeUserCashBalance(userId, userCashBalance);
-      const amount = new Amount();
-      amount.initBalanceAmount = (userCashBalance) ? userCashBalance.balance : 0;
-      amount.depositAmount = payableAmount.toNumber();
-      const updateCashBalance = await this._preUpdateUserCashBalance(userId, amount);
+      const initBalanceAmount = (userCashBalance) ? userCashBalance.balance : 0;
+      const depositAmount = payableAmount.toNumber();
+      const withdrawAmount = 0;
+      const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
+      amount.calculateBalanceAmount();
+      const updateCashBalance = await this._preUpdateUserCashBalance(amount, userCashBalance);
       await this._userCashBalanceRepo.update(condition, updateCashBalance);
       await this._setFinishToQualifiedClaimer(userId);
     }
@@ -765,12 +755,12 @@ export class InvestmentService {
    * @param amount It's a instance from Amount class.
    * @return UserCashBalance
    */
-  private async _preUpdateUserCashBalance(userId: string, amount: Amount)
+  private async _preUpdateUserCashBalance(amount: Amount, userCashBalanceRecord: UserCashBalance)
     : Promise<UserCashBalance> {
-    const condition = { userId };
-    const updateCashBalance = await this._userCashBalanceRepo.getOne(condition);
-    updateCashBalance.balance = amount.balanceAmount;
-    return updateCashBalance;
+    amount.calculateBalanceAmount();
+    userCashBalanceRecord.balance = amount.balanceAmount;
+    userCashBalanceRecord.updatedAt = new Date();
+    return userCashBalanceRecord;
   }
 
   /**

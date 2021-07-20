@@ -44,28 +44,28 @@ export class TimeService {
 }
 
 export class Amount {
-  _initBalanceAmount?: number = 0;
-  _balanceAmount?: number;
-  depositAmount?: number = 0;
-  withdrawAmount?: number = 0;
+  private _balanceAmount?: number;
 
-  public get initBalanceAmount(): number {
-    return this._initBalanceAmount;
-  }
+  public constructor(
+    private readonly initBalanceAmount: number = 0,
+    private readonly depositAmount: number = 0,
+    private readonly withdrawAmount: number = 0
+  ) {
 
-  public set initBalanceAmount(balanceAmount: number) {
-    this._initBalanceAmount = balanceAmount;
   }
 
   public get balanceAmount(): number {
-    this._balanceAmount = new BigNumber(this._initBalanceAmount)
-      .plus(new BigNumber(this.depositAmount))
-      .minus(new BigNumber(this.withdrawAmount))
-      .toNumber();
     return this._balanceAmount;
   }
 
+  public calculateBalanceAmount() {
+    this._balanceAmount = new BigNumber(this.initBalanceAmount)
+      .plus(new BigNumber(this.depositAmount))
+      .minus(new BigNumber(this.withdrawAmount))
+      .toNumber();
+  }
+
   public get isWithdrawAmountLessThanBalance() {
-    return new BigNumber(this.withdrawAmount).isGreaterThan(new BigNumber(this.balanceAmount));
+    return new BigNumber(this.withdrawAmount).isGreaterThan(new BigNumber(this.initBalanceAmount));
   }
 }
