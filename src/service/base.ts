@@ -1,18 +1,5 @@
 import dayjs from 'dayjs';
-
-import { Repository } from 'typeorm';
 import BigNumber from 'bignumber.js';
-
-export class RepositoryService {
-  /**
-   * Insert data there is no data or update data.
-   * @param repository database repository
-   * @param entity database entity
-   */
-  public static async insertOrUpdate<T, K>(repository: Repository<T>, entity: K): Promise<void> {
-    await repository.save(entity);
-  }
-}
 
 export class TimeService {
   /**
