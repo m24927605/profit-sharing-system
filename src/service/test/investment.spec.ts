@@ -179,7 +179,7 @@ describe('Test InvestmentService', () => {
     sharedProfitDto.outcome = '0';
     jest.spyOn(comProfitFlowRepo, 'create').mockResolvedValue(void 0);
     jest.spyOn(comProfitBalanceRepo, 'createOrUpdate').mockResolvedValue(void 0);
-    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as unknown as CompanySharedProfitBalance);
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue({ balance: 0 } as CompanySharedProfitBalance);
     await investmentService.addProfitTxHandler(sharedProfitDto, undefined);
     expect(comProfitFlowRepo.create).toBeCalledTimes(1);
     const comSharedProfitFlow = new CompanySharedProfitFlow();
@@ -190,7 +190,23 @@ describe('Test InvestmentService', () => {
     expect(comProfitBalanceRepo.createOrUpdate).toBeCalledTimes(1);
     expect(comProfitBalanceRepo.createOrUpdate).toBeCalledWith(mockComProfitBalance, undefined);
   });
-
+  it('company add profit success but no company profit balance record', async () => {
+    const sharedProfitDto = new SharedProfitDto();
+    sharedProfitDto.income = '100';
+    sharedProfitDto.outcome = '0';
+    jest.spyOn(comProfitFlowRepo, 'create').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'createOrUpdate').mockResolvedValue(void 0);
+    jest.spyOn(comProfitBalanceRepo, 'getOne').mockResolvedValue(void 0);
+    await investmentService.addProfitTxHandler(sharedProfitDto, undefined);
+    expect(comProfitFlowRepo.create).toBeCalledTimes(1);
+    const comSharedProfitFlow = new CompanySharedProfitFlow();
+    comSharedProfitFlow.income = 100;
+    comSharedProfitFlow.outcome = 0;
+    expect(comProfitFlowRepo.create).toBeCalledWith(comSharedProfitFlow, undefined);
+    const mockComProfitBalance = { id: 1, balance: 100 };
+    expect(comProfitBalanceRepo.createOrUpdate).toBeCalledTimes(1);
+    expect(comProfitBalanceRepo.createOrUpdate).toBeCalledWith(mockComProfitBalance, undefined);
+  });
   it('get unqualified claimer success', async () => {
     const userId = '1';
     jest.spyOn(claimBookingRepo, 'list').mockResolvedValue([

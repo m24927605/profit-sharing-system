@@ -66,6 +66,7 @@ export class InvestmentService {
    * @param sharedProfitDto - It's the money that the company want to store in or take it out.
    * @return - void
    */
+
   /* istanbul ignore next */
   public async addProfit(sharedProfitDto: SharedProfitDto): Promise<void> {
     await getManager().transaction(async sql => {
@@ -152,6 +153,7 @@ export class InvestmentService {
    * @param disInvestDto It's a DTO object from API request.
    * @return - void
    */
+
   /* istanbul ignore next */
   public async disinvest(disInvestDto: InvestOrDisInvestDto): Promise<void> {
     await getManager().transaction(async sql => {
@@ -286,6 +288,7 @@ export class InvestmentService {
    * @param withdrawDto It's a DTO object from API request.
    * @return - void
    */
+
   /* istanbul ignore next */
   public async withdraw(withdrawDto: WithdrawDto): Promise<void> {
     await getManager().transaction(async sql => {
@@ -377,6 +380,7 @@ export class InvestmentService {
    * @param toAt It's ended date about settle.
    * @return - void
    */
+
   /* istanbul ignore next */
   public async settleUserShares(fromAt: string, toAt: string): Promise<void> {
     await getManager().transaction(async sql => {
@@ -597,6 +601,7 @@ export class InvestmentService {
    * @param payableClaimers It's a list that company needs to pay.
    * @return - void
    */
+
   /* istanbul ignore next */
   public async shareProfit(payableClaimers: Map<string, BigNumber>): Promise<void> {
     await getManager().transaction(async sql => {
