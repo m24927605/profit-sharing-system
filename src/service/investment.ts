@@ -298,7 +298,6 @@ export class InvestmentService {
     const depositAmount = withdrawData.deposit;
     const withdrawAmount = withdrawData.withdraw;
     const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
-    amount.calculateBalanceAmount();
     await InvestmentService._checkWithdrawAmountLessThanBalance(amount);
     const newUserCashBalance = await InvestmentService._preUpdateUserCashBalance(amount, userCashBalance);
     await this._updateUserCashBalanceForWithdraw(newUserCashBalance, withdrawData);
@@ -730,7 +729,6 @@ export class InvestmentService {
       const depositAmount = payableAmount.toNumber();
       const withdrawAmount = 0;
       const amount = new Amount(initBalanceAmount, depositAmount, withdrawAmount);
-      amount.calculateBalanceAmount();
       const updateCashBalance = await InvestmentService._preUpdateUserCashBalance(amount, userCashBalance);
       await this._userCashBalanceRepo.update(condition, updateCashBalance);
       await this._setFinishToQualifiedClaimer(userId);
@@ -758,7 +756,6 @@ export class InvestmentService {
    */
   private static async _preUpdateUserCashBalance(amount: Amount, userCashBalanceRecord: UserCashBalance)
     : Promise<UserCashBalance> {
-    amount.calculateBalanceAmount();
     userCashBalanceRecord.balance = amount.balanceAmount;
     userCashBalanceRecord.updatedAt = new Date();
     return userCashBalanceRecord;
