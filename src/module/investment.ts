@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { InvestmentController } from '../controller/investment';
-import { InvestmentService } from '../service/investment';
 import { TypeOrmModule } from '@nestjs/typeorm';
+
 import { ClaimBooking } from '../entity/claim-booking';
 import { ClaimBookingRepository } from '../repository/claim-booking';
 import { CompanySharedProfitBalance } from '../entity/company-shared-profit-balance';
 import { CompanySharedProfitFlow } from '../entity/company-shared-profit-flow';
 import { CompanyProfitBalanceRepository } from '../repository/company-shared-profit-balance';
 import { CompanyProfitFlowRepository } from '../repository/company-shared-profit-flow';
+import { InvestmentController } from '../controller/investment';
+import { InvestmentService } from '../service/investment';
 import { UserCashBalance } from '../entity/user-cash-balance';
 import { UserCashBalanceRepository } from '../repository/user-cash-balance';
 import { UserCashFlow } from '../entity/user-cash-flow';

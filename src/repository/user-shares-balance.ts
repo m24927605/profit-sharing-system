@@ -1,4 +1,8 @@
-import { EntityManager, getRepository } from 'typeorm';
+import {
+  EntityManager,
+  getRepository
+} from 'typeorm';
+
 import { UserSharesBalance } from '../entity/user-shares-balance';
 
 export class UserSharesBalanceRepository {

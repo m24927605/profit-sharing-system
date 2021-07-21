@@ -1,4 +1,5 @@
 import { EntityManager } from 'typeorm';
+
 import { UserCashFlow } from '../entity/user-cash-flow';
 
 export class UserCashFlowRepository {

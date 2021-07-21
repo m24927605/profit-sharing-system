@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { InvestmentModule } from './investment';
+
 import { CronTaskService } from '../service/cron-task';
+import { InvestmentModule } from './investment';
 
 @Module({
   imports: [

@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+
 import { ManagerController } from '../controller/manager';
 import { ManagerRepository } from '../repository/manager';
 import { ManagerService } from '../service/manager';

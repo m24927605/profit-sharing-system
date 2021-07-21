@@ -1,4 +1,5 @@
 import { getRepository } from 'typeorm';
+
 import { ClaimBooking } from '../entity/claim-booking';
 
 export class ClaimBookingRepository {

@@ -1,4 +1,5 @@
 import { getRepository } from 'typeorm';
+
 import { User } from '../entity/user';
 
 export class UserRepository {

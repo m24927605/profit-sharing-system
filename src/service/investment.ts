@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { EntityManager, getManager, Raw } from 'typeorm';
 import { Injectable } from '@nestjs/common';
-
+import { Amount } from './base';
 import { ClaimDto, InvestOrDisInvestDto, UserShares, WithdrawDto } from '../dto/investment';
 import { SharedProfit, SharedProfitDto } from '../dto/shared-profit';
 import { ClaimBooking } from '../entity/claim-booking';
@@ -17,9 +17,11 @@ import {
 } from '../entity/company-shared-profit-flow';
 import { CompanySharedProfitBalance as ComProfitBalance } from '../entity/company-shared-profit-balance';
 import { ClaimState } from '../util/state';
-import { MathService } from '../util/tool';
-import { UtilService } from '../util/service';
-import { Amount, TimeService } from './base';
+import {
+  MathService,
+  TimeService,
+  UtilService
+} from '../util/service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ClaimBookingRepository } from '../repository/claim-booking';
 import { CompanyProfitBalanceRepository } from '../repository/company-shared-profit-balance';

@@ -1,4 +1,5 @@
 import { EntityManager } from 'typeorm';
+
 import {
   CompanySharedProfitFlow as ComProfitFlow
 } from '../entity/company-shared-profit-flow';

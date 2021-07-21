@@ -9,18 +9,18 @@ import {
 } from '@nestjs/common';
 
 import {
+  SharedProfit,
+  SharedProfitDto
+} from '../dto/shared-profit';
+import {
   ClaimDto,
   InvestOrDisInvestDto,
   WithdrawDto
 } from '../dto/investment';
-import {
-  SharedProfit,
-  SharedProfitDto
-} from '../dto/shared-profit';
-import { UtilController } from '../util/controller';
 import { InvestmentService } from '../service/investment';
 import { ResponseType } from './base/response';
-import { TimeService } from '../service/base';
+import { TimeService } from '../util/service';
+import { UtilController } from '../util/controller';
 
 
 @Controller('/investment')

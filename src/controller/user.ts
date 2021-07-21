@@ -9,10 +9,9 @@ import {
 } from '@nestjs/common';
 
 import { CreateUserDto } from '../dto/user';
+import { ResponseType } from './base/response';
 import { UtilController } from '../util/controller';
 import { UserService } from '../service/user';
-import { ResponseType } from './base/response';
-
 
 @Controller('/users')
 export class UserController {

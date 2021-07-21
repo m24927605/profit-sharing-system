@@ -1,4 +1,5 @@
 import { getRepository } from 'typeorm';
+
 import { UserCashBalance } from '../entity/user-cash-balance';
 
 export class UserCashBalanceRepository {

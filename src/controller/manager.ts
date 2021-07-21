@@ -12,12 +12,13 @@ import {
   CreateManagerDto,
   ManagerLoginDto
 } from '../dto/manager';
-import { ManagerService } from '../service/manager';
-import { UtilController } from '../util/controller';
 import {
   ResponsePayload,
   ResponseType
 } from './base/response';
+import { ManagerService } from '../service/manager';
+import { UtilController } from '../util/controller';
+
 
 @Controller('/managers')
 export class ManagerController {
