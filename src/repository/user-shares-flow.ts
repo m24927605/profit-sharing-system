@@ -2,6 +2,7 @@ import {
   EntityManager,
   getRepository
 } from 'typeorm';
+
 import { UserSharesFlow } from '../entity/user-shares-flow';
 
 export class UserSharesFlowRepository {

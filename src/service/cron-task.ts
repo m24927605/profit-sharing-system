@@ -1,15 +1,10 @@
+import BigNumber from 'bignumber.js';
 import dayjs from 'dayjs';
-
-import {
-  Injectable
-} from '@nestjs/common';
-import {
-  Cron
-} from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
+import { Injectable } from '@nestjs/common';
 
 import { InvestmentService } from './investment';
-import { TimeService } from './base';
-import BigNumber from 'bignumber.js';
+import { TimeService } from '../util/service';
 
 @Injectable()
 export class CronTaskService {

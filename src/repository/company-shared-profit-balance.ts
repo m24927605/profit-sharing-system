@@ -1,4 +1,8 @@
-import { EntityManager, getRepository } from 'typeorm';
+import {
+  EntityManager,
+  getRepository
+} from 'typeorm';
+
 import {
   CompanySharedProfitBalance as ComProfitBalance
 } from '../entity/company-shared-profit-balance';

@@ -1,6 +1,8 @@
 import {
   IsDecimal,
-  IsNotEmpty, IsNumberString, Validate
+  IsNotEmpty,
+  IsNumberString,
+  Validate
 } from 'class-validator';
 import { AmountRule } from '../service/validation';
 

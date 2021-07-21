@@ -1,4 +1,5 @@
 import { getRepository } from 'typeorm';
+
 import { Manager } from '../entity/manager';
 
 export class ManagerRepository {

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
+
 import { AuthMiddleware } from './middleware/auth';
 import { InvestmentModule } from './module/investment';
 import { ManagerModule } from './module/manager';
@@ -17,9 +18,9 @@ import { UserModule } from './module/user';
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
     ConfigModule.forRoot(),
     JwtModule.register({ secret: process.env.JWT_SECRET }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST,
